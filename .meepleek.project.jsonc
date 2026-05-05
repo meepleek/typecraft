@@ -1,0 +1,7 @@
+{
+    "$schema": "https://raw.githubusercontent.com/meepleek/json_schema/refs/tags/v0.8/project-config.schema.json",
+    "category": "gd",
+    "label": "typecraft",
+    "command_config": "rs:bevy",
+    "task_project": "gd.typecraft"
+}
