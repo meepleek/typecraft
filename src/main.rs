@@ -3,7 +3,6 @@
 // Disable console on Windows for non-dev builds.
 #![cfg_attr(not(feature = "dev"), windows_subsystem = "windows")]
 
-mod asset_tracking;
 mod audio;
 #[cfg(feature = "dev")]
 mod dev_tools;
@@ -45,7 +44,6 @@ impl Plugin for AppPlugin {
 
         // Add other plugins.
         app.add_plugins((
-            asset_tracking::plugin,
             audio::plugin,
             gameplay::plugin,
             #[cfg(feature = "dev")]
