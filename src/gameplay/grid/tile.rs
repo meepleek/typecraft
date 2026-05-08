@@ -35,19 +35,20 @@ pub enum TileObjectKind {
 pub struct TileIterator {
     grid_size: U16Vec2,
     tile: Coords,
+    start_tile: Coords,
 }
 impl Iterator for TileIterator {
     type Item = Coords;
 
     fn next(&mut self) -> Option<Self::Item> {
         let size = self.grid_size.as_i16vec2();
-        if self.tile.y >= size.y as i16 {
+        if self.tile.y - self.start_tile.y >= size.y as i16 {
             None
         } else {
             let next = self.tile;
             self.tile.x += 1;
-            if self.tile.x == size.x {
-                self.tile = (0, self.tile.y + 1).into();
+            if self.tile.x - self.start_tile.x == size.x {
+                self.tile = (self.start_tile.x, self.tile.y + 1).into();
             }
             Some(next)
         }
@@ -55,9 +56,20 @@ impl Iterator for TileIterator {
 }
 impl TileIterator {
     pub fn from_size(grid_size: impl Into<U16Vec2>) -> Self {
+        Self::new(Coords::ZERO, grid_size)
+    }
+
+    pub fn centered(grid_size: impl Into<U16Vec2>) -> Self {
+        let grid_size = grid_size.into();
+        Self::new(-grid_size.as_i16vec2() / 2, grid_size)
+    }
+
+    fn new(centre: impl Into<Coords>, grid_size: impl Into<U16Vec2>) -> Self {
+        let tile = centre.into();
         Self {
             grid_size: grid_size.into(),
-            tile: Coords::ZERO,
+            tile,
+            start_tile: tile,
         }
     }
 }
@@ -67,7 +79,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn iter() {
+    fn from_size() {
         let tiles: Vec<_> = TileIterator::from_size((5, 3)).collect();
         assert_eq!(
             tiles,
@@ -87,6 +99,32 @@ mod tests {
                 (2, 2),
                 (3, 2),
                 (4, 2),
+            ]
+            .map(Into::into)
+        );
+    }
+
+    #[test]
+    fn centered() {
+        let tiles: Vec<_> = TileIterator::centered((5, 3)).collect();
+        assert_eq!(
+            tiles,
+            [
+                (-2, -1),
+                (-1, -1),
+                (0, -1),
+                (1, -1),
+                (2, -1),
+                (-2, 0),
+                (-1, 0),
+                (0, 0),
+                (1, 0),
+                (2, 0),
+                (-2, 1),
+                (-1, 1),
+                (0, 1),
+                (1, 1),
+                (2, 1),
             ]
             .map(Into::into)
         );
