@@ -25,11 +25,11 @@ pub struct TileObject {
     pub kind: TileObjectKind,
 }
 
-#[derive(Component, Debug, Clone, Copy, PartialEq)]
+#[derive(Component, Debug, Clone, PartialEq)]
 pub enum TileObjectKind {
     Player,
-    Enemy,
-    Wall,
+    Enemy(String),
+    Wall(String),
 }
 
 pub struct TileIterator {

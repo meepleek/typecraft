@@ -27,11 +27,12 @@ pub fn draw_tile_chars(_ev: On<Add, Grid>, grid: Single<&Grid>, mut cmd: Command
         Transform::from_translation(grid.tile_to_world(player_tile).unwrap().extend(0.)),
     ));
 
-    for t in grid.iter_tiles().filter(|t| *t != player_tile) {
+    for (t, c) in grid.iter_movable_tiles().filter(|(t, _)| *t != player_tile) {
         cmd.spawn((
             Transform::from_translation(grid.tile_to_world(t).unwrap().extend(0.)),
-            Text2d::new("A"),
+            Text2d::new(c),
             TextFont::from_font_size(40.),
+            // todo: use relationships? GridTile(grid_e)
         ));
     }
 }

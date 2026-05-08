@@ -38,6 +38,9 @@ pub struct Grid {
     center_global_position: Vec2,
     tile_entities: HashMap<Coords, Entity>,
     occupied_tiles: HashMap<Coords, tile::TileObject>,
+    /// Tiles which can contain TileObjects or be moved into
+    /// Coords that are not in this map are unbreakable walls
+    targetable_tiles: HashMap<Coords, char>,
     entities: HashMap<Entity, Coords>,
 }
 
@@ -72,14 +75,28 @@ impl Grid {
         if width == 0 || heigth == 0 {
             panic!("Invalid dimension - no dimension can be 0");
         }
-        Self {
+
+        let mut grid = Self {
             width,
             heigth,
             tile_entities: HashMap::with_capacity((width * heigth) as usize),
             occupied_tiles: HashMap::default(),
+            targetable_tiles: HashMap::default(),
             entities: HashMap::default(),
             center_global_position: Vec2::ZERO,
+        };
+
+        let mut rng = rand::rng();
+        let mut targetable_tiles = HashMap::with_capacity((width * heigth) as usize);
+        for t in grid
+            .iter_tiles()
+            .filter(|t| t.min_element() > 0 && t.x < width as i16 - 1 && t.y < heigth as i16 - 1)
+        {
+            targetable_tiles.insert(t, 'a');
         }
+        grid.targetable_tiles = targetable_tiles;
+
+        grid
     }
 
     #[allow(dead_code)]
@@ -195,6 +212,30 @@ impl Grid {
         tile.min_element() >= 0 && tile.x < self.width as _ && tile.y < self.heigth as _
     }
 
+    pub fn neighbour_chars(&self, tile: Coords, move_dir: tile::TileDirection) -> Vec<char> {
+        let dirs = Self::neighbour_dirs(move_dir);
+        dirs.into_iter()
+            .copied()
+            .flat_map(|dir| {
+                let target = tile + dir;
+                if !self.within_bounds(target) {
+                    return Vec::new();
+                }
+                match self.occupied_tiles.get(&target) {
+                    Some(tile_obj) => match tile_obj.kind {
+                        tile::TileObjectKind::Enemy(ref word)
+                        | tile::TileObjectKind::Wall(ref word) => word.chars().collect(),
+                        tile::TileObjectKind::Player => Vec::new(),
+                    },
+                    None => self
+                        .targetable_tiles
+                        .get(&target)
+                        .map_or_else(|| Vec::new(), |c| vec![*c]),
+                }
+            })
+            .collect()
+    }
+
     fn neighbours(
         &self,
         tile: Coords,
@@ -202,11 +243,7 @@ impl Grid {
         move_dir: tile::TileDirection,
         rng: &mut impl Rng,
     ) -> Vec<Coords> {
-        let dirs: &[Coords] = match move_dir {
-            tile::TileDirection::Orthogonal => &DIRS_ORTHO,
-            tile::TileDirection::Diagonal => &DIRS_DIAG,
-            tile::TileDirection::All => &DIRS,
-        };
+        let dirs = Self::neighbour_dirs(move_dir);
         let mut neighbours: Vec<_> = dirs
             .into_iter()
             .copied()
@@ -224,8 +261,26 @@ impl Grid {
         neighbours
     }
 
+    fn neighbour_dirs(move_dir: tile::TileDirection) -> &'static [Coords] {
+        match move_dir {
+            tile::TileDirection::Orthogonal => &DIRS_ORTHO,
+            tile::TileDirection::Diagonal => &DIRS_DIAG,
+            tile::TileDirection::All => &DIRS,
+        }
+    }
+
     pub fn iter_tiles(&self) -> tile::TileIterator {
         tile::TileIterator::from_size((self.width, self.heigth))
+    }
+
+    pub fn iter_targetable_tiles(&self) -> impl Iterator<Item = (Coords, char)> {
+        self.iter_tiles()
+            .filter_map(|t| self.targetable_tiles.get(&t).map(|c| (t, *c)))
+    }
+
+    pub fn iter_movable_tiles(&self) -> impl Iterator<Item = (Coords, char)> {
+        self.iter_targetable_tiles()
+            .filter(|(t, _)| !self.occupied_tiles.contains_key(t))
     }
 
     #[allow(dead_code)]
@@ -248,10 +303,10 @@ impl Grid {
             dbg_map.push(match self.occupied_tiles.get(&tile) {
                 Some(tile::TileObject { kind, .. }) => match kind {
                     tile::TileObjectKind::Player => '@',
-                    tile::TileObjectKind::Enemy => '!',
-                    tile::TileObjectKind::Wall => '#',
+                    tile::TileObjectKind::Enemy(_) => '*',
+                    tile::TileObjectKind::Wall(_) => '#',
                 },
-                None => '.',
+                None => self.targetable_tiles.get(&tile).map_or('■', |c| *c),
             });
         }
         dbg_map.push_str(&format!("{}\n _{}_", size.y - 1, &x_axis));
@@ -285,7 +340,7 @@ fn add_new_tile_objects_to_grid(
         or_return!(grid.place_entity(
             tile::TileObject {
                 entity: e,
-                kind: *kind,
+                kind: kind.clone(),
             },
             tile,
         ));
@@ -392,7 +447,7 @@ mod tests {
                 .place_entity(
                     tile::TileObject {
                         entity: Entity::PLACEHOLDER,
-                        kind: tile::TileObjectKind::Wall,
+                        kind: tile::TileObjectKind::Wall("Wall".to_string()),
                     },
                     tile.into(),
                 )
@@ -403,7 +458,7 @@ mod tests {
                 .place_entity(
                     tile::TileObject {
                         entity: Entity::PLACEHOLDER,
-                        kind: tile::TileObjectKind::Enemy,
+                        kind: tile::TileObjectKind::Enemy("smite".to_string()),
                     },
                     tile.into(),
                 )
