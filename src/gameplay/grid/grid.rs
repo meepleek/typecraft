@@ -6,7 +6,7 @@ use bevy::platform::collections::HashMap;
 use crate::prelude::*;
 use tile::*;
 
-pub const TILE_SIZE: u16 = 64;
+pub const TILE_SIZE: u16 = 96;
 
 pub const DIRS_ORTHO: [Coords; 4] = [Coords::NEG_Y, Coords::X, Coords::Y, Coords::NEG_X];
 pub const DIRS_DIAG: [Coords; 4] = [
@@ -248,29 +248,25 @@ impl Grid {
             .collect()
     }
 
-    fn neighbours(
+    pub fn targetable_neighbours(
         &self,
         tile: Coords,
-        allowed_occupied_tile: Option<Coords>,
         move_dir: TileDirection,
-        rng: &mut impl Rng,
-    ) -> Vec<Coords> {
+    ) -> impl Iterator<Item = Coords> {
+        self.neighbours(tile, move_dir)
+            .filter(|t| self.targetable_tiles.contains_key(t))
+    }
+
+    pub fn neighbours(
+        &self,
+        tile: Coords,
+        move_dir: TileDirection,
+    ) -> impl Iterator<Item = Coords> {
         let dirs = Self::neighbour_dirs(move_dir);
-        let mut neighbours: Vec<_> = dirs
-            .into_iter()
-            .copied()
-            .filter_map(|dir| {
-                let target = tile + dir;
-                if allowed_occupied_tile.is_some_and(|t| t == target) {
-                    return Some(target);
-                }
-                self.can_place_at(target).ok().map(|_| target)
-            })
-            .collect();
-        if !neighbours.is_empty() {
-            neighbours.shuffle(rng);
-        }
-        neighbours
+        dirs.iter().copied().filter_map(move |dir| {
+            let target = tile + dir;
+            self.within_bounds(target).then(|| target)
+        })
     }
 
     fn neighbour_dirs(move_dir: TileDirection) -> &'static [Coords] {
@@ -279,6 +275,16 @@ impl Grid {
             TileDirection::Diagonal => &DIRS_DIAG,
             TileDirection::All => &DIRS,
         }
+    }
+
+    pub fn tile_next_char(&self, tile: Coords) -> Option<char> {
+        self.occupied_tiles.get(&tile).map_or_else(
+            || self.targetable_tiles.get(&tile).copied(),
+            |to| match &to.kind {
+                TileObjectKind::Player => None,
+                TileObjectKind::Enemy(txt) | TileObjectKind::Wall(txt) => txt.chars().next(),
+            },
+        )
     }
 
     pub fn iter_tiles(&self) -> TileIterator {
@@ -366,15 +372,17 @@ mod tests {
 
     use super::*;
 
+    const TILE_SIZE_F32: f32 = TILE_SIZE as f32;
+
     #[test_case(0., 0., 0., 0. => Some(Coords::ONE))]
-    #[test_case(64.,-64., 0., 0. => Some(Coords::ZERO))]
-    #[test_case(64.,-64., 20., -20. => Some(Coords::ZERO))]
-    #[test_case(64.,-64., 40., -40. => Some(Coords::ONE))]
-    #[test_case(64., -64., 64., 0. => Some(Coords::new(1, 0)))]
-    #[test_case(0., 0., 120., 0. => None)]
-    #[test_case(0., 0., -128., 0. => None)]
-    #[test_case(0., 0., 0., 120. => None)]
-    #[test_case(0., 0., 0., -128. => None)]
+    #[test_case(TILE_SIZE_F32, -TILE_SIZE_F32, 0., 0. => Some(Coords::ZERO))]
+    #[test_case(TILE_SIZE_F32, -TILE_SIZE_F32, TILE_SIZE_F32 * 0.4, TILE_SIZE_F32 * -0.4 => Some(Coords::ZERO))]
+    #[test_case(TILE_SIZE_F32, -TILE_SIZE_F32, TILE_SIZE_F32 * 0.6, TILE_SIZE_F32 * -0.6 => Some(Coords::ONE))]
+    #[test_case(TILE_SIZE_F32, -TILE_SIZE_F32, TILE_SIZE_F32, 0. => Some(Coords::new(1, 0)))]
+    #[test_case(0., 0., TILE_SIZE_F32 * 1.9 , 0. => None)]
+    #[test_case(0., 0., TILE_SIZE_F32 * -2., 0. => None)]
+    #[test_case(0., 0., 0., TILE_SIZE_F32 * 1.9 => None)]
+    #[test_case(0., 0., 0., TILE_SIZE_F32 * -2. => None)]
     #[traced_test]
     fn world_to_tile(map_x: f32, map_y: f32, world_x: f32, world_y: f32) -> Option<Coords> {
         let mut board = Grid::new(3, 3);
@@ -383,11 +391,11 @@ mod tests {
         board.world_to_tile(Vec2::new(world_x, world_y))
     }
 
-    #[test_case(0., 0., 0, 0 => Some(Vec2::new(-64., 64.)))]
+    #[test_case(0., 0., 0, 0 => Some(Vec2::new(-TILE_SIZE_F32, TILE_SIZE_F32)))]
     #[test_case(0., 0., 1, 1 => Some(Vec2::new(0., 0.)))]
     // todo: fix failing test
-    // #[test_case(64.,-64., 0, 0 => Some(Vec2::new(64., -64.)))]
-    #[test_case(64.,-64., 2, 2 => Some(Vec2::new(128., -128.)))]
+    // #[test_case(TILE_SIZE_F32,-TILE_SIZE_F32, 0, 0 => Some(Vec2::new(TILE_SIZE_F32, -TILE_SIZE_F32)))]
+    #[test_case(TILE_SIZE_F32,-TILE_SIZE_F32, 2, 2 => Some(Vec2::new(TILE_SIZE_F32 * 2., TILE_SIZE_F32 * -2.)))]
     #[test_case(0.,0., 3, 0 => None)]
     #[test_case(0.,0., 0, 3 => None)]
     #[traced_test]
