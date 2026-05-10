@@ -28,8 +28,57 @@ pub struct TileObject {
 #[derive(Component, Debug, Clone, PartialEq)]
 pub enum TileObjectKind {
     Player,
-    Enemy(String),
-    Wall(String),
+    Enemy(TypableWord),
+    Wall(TypableWord),
+}
+impl TileObjectKind {
+    pub fn enemy(word: impl Into<String>) -> Self {
+        TileObjectKind::Enemy(TypableWord::new(word.into().chars().collect::<Vec<_>>()))
+    }
+
+    pub fn wall(word: impl Into<String>) -> Self {
+        TileObjectKind::Wall(TypableWord::new(word.into().chars().collect::<Vec<_>>()))
+    }
+
+    pub fn next_char(&self) -> Option<char> {
+        match self {
+            Self::Player => None,
+            Self::Enemy(word) | Self::Wall(word) => word.next_char(),
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct TypableWord {
+    pub chars: Vec<char>,
+    completed_count: usize,
+}
+impl TypableWord {
+    pub fn new(chars: impl Into<Vec<char>>) -> Self {
+        Self {
+            chars: chars.into(),
+            completed_count: 0,
+        }
+    }
+
+    pub fn next_char(&self) -> Option<char> {
+        self.chars.get(self.completed_count).copied()
+    }
+}
+
+#[derive(Debug)]
+pub struct TargetableNeighbour {
+    pub tile: Coords,
+    pub move_char: char,
+    pub object: Option<TileObject>,
+}
+impl TargetableNeighbour {
+    pub fn next_char(&self) -> Option<char> {
+        match &self.object {
+            Some(to) => to.kind.next_char(),
+            None => Some(self.move_char),
+        }
+    }
 }
 
 pub struct TileIterator {

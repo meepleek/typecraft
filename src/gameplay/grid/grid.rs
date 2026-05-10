@@ -141,11 +141,11 @@ impl Grid {
         self.tile_entities.get(&tile).cloned()
     }
 
-    pub fn get_player_tile(&self) -> Option<Coords> {
+    pub fn get_player(&self) -> Option<(Coords, Entity)> {
         self.occupied_tiles
             .iter()
             .find(|(_, obj)| obj.kind == TileObjectKind::Player)
-            .map(|(tile, _)| *tile)
+            .map(|(tile, to)| (*tile, to.entity))
     }
 
     pub fn get_tile_object(&self, coords: Coords) -> Option<TileObject> {
@@ -235,7 +235,7 @@ impl Grid {
                 match self.occupied_tiles.get(&target) {
                     Some(tile_obj) => match tile_obj.kind {
                         TileObjectKind::Enemy(ref word) | TileObjectKind::Wall(ref word) => {
-                            word.chars().collect()
+                            word.chars.clone()
                         }
                         TileObjectKind::Player => Vec::new(),
                     },
@@ -252,9 +252,14 @@ impl Grid {
         &self,
         tile: Coords,
         move_dir: TileDirection,
-    ) -> impl Iterator<Item = Coords> {
-        self.neighbours(tile, move_dir)
-            .filter(|t| self.targetable_tiles.contains_key(t))
+    ) -> impl Iterator<Item = TargetableNeighbour> {
+        self.neighbours(tile, move_dir).filter_map(move |t| {
+            self.targetable_tiles.get(&t).map(|c| TargetableNeighbour {
+                tile: t,
+                move_char: *c,
+                object: self.occupied_tiles.get(&t).cloned(),
+            })
+        })
     }
 
     pub fn neighbours(
@@ -275,16 +280,6 @@ impl Grid {
             TileDirection::Diagonal => &DIRS_DIAG,
             TileDirection::All => &DIRS,
         }
-    }
-
-    pub fn tile_next_char(&self, tile: Coords) -> Option<char> {
-        self.occupied_tiles.get(&tile).map_or_else(
-            || self.targetable_tiles.get(&tile).copied(),
-            |to| match &to.kind {
-                TileObjectKind::Player => None,
-                TileObjectKind::Enemy(txt) | TileObjectKind::Wall(txt) => txt.chars().next(),
-            },
-        )
     }
 
     pub fn iter_tiles(&self) -> TileIterator {
@@ -467,7 +462,7 @@ mod tests {
                 .place_entity(
                     TileObject {
                         entity: Entity::PLACEHOLDER,
-                        kind: TileObjectKind::Wall("Wall".to_string()),
+                        kind: TileObjectKind::wall("Wall"),
                     },
                     tile.into(),
                 )
@@ -478,7 +473,7 @@ mod tests {
                 .place_entity(
                     TileObject {
                         entity: Entity::PLACEHOLDER,
-                        kind: TileObjectKind::Enemy("smite".to_string()),
+                        kind: TileObjectKind::enemy("smite"),
                     },
                     tile.into(),
                 )

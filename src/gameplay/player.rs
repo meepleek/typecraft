@@ -1,6 +1,4 @@
-//! Player-specific behavior.
-
-use bevy::prelude::*;
+use crate::prelude::*;
 
 pub(super) fn plugin(_app: &mut App) {}
 

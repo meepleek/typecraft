@@ -43,6 +43,8 @@ impl Plugin for AppPlugin {
                 }),
         );
 
+        app.add_plugins(mplk_tween::prelude::TweenBuilderPlugin);
+
         // Add other plugins.
         app.add_plugins((
             audio::plugin,

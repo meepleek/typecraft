@@ -16,18 +16,28 @@ pub fn spawn_level(mut commands: Commands) {
         Transform::default(),
         Visibility::default(),
         DespawnOnExit(Screen::Gameplay),
-        children![Grid::new(12, 12)],
+        children![Grid::new(10, 12)],
     ));
 }
 
-pub fn draw_tile_chars(_ev: On<Add, Grid>, grid: Single<&Grid>, mut cmd: Commands) {
+pub fn draw_tile_chars(_ev: On<Add, Grid>, mut grid: Single<&mut Grid>, mut cmd: Commands) {
     let player_tile = grid.grid_size().as_i16vec2() / 2;
-    cmd.spawn((
-        player::player(),
-        Transform::from_translation(grid.tile_to_world(player_tile).unwrap().extend(0.)),
-    ));
+    let player_e = cmd
+        .spawn((
+            player::player(),
+            Transform::from_translation(grid.tile_to_world(player_tile).unwrap().extend(0.)),
+        ))
+        .id();
+    grid.place_entity(
+        tile::TileObject {
+            entity: player_e,
+            kind: tile::TileObjectKind::Player,
+        },
+        player_tile,
+    )
+    .expect("Failed to place player");
 
-    for (t, c) in grid.iter_movable_tiles().filter(|(t, _)| *t != player_tile) {
+    for (t, c) in grid.iter_targetable_tiles() {
         cmd.spawn((
             Transform::from_translation(grid.tile_to_world(t).unwrap().extend(0.)),
             Text2d::new(c),
@@ -42,8 +52,7 @@ pub fn draw_grid_gizmos(mut gizmos: Gizmos, grid: Option<Single<&Grid>>) {
     gizmos
         .grid_2d(
             Isometry2d::default(),
-            // Isometry2d::from_translation(Vec2::splat(tile_size / 2.)),
-            UVec2::splat(grid.grid_size().x as u32),
+            grid.grid_size().as_uvec2(),
             Vec2::splat(grid::TILE_SIZE as f32),
             Color::BLACK,
         )
