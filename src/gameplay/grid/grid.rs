@@ -306,12 +306,12 @@ impl Grid {
         TileIterator::from_size((self.width, self.heigth))
     }
 
-    pub fn iter_targetable_tiles(&self) -> impl Iterator<Item = (Coords, char)> {
+    pub fn iter_targetable_tiles(&self) -> impl Iterator<Item = (Coords, TargetableTile)> {
         self.iter_tiles()
-            .filter_map(|t| self.targetable_tiles.get(&t).map(|tt| (t, tt.move_char)))
+            .filter_map(|t| self.targetable_tiles.get(&t).map(|tt| (t, tt.clone())))
     }
 
-    pub fn iter_movable_tiles(&self) -> impl Iterator<Item = (Coords, char)> {
+    pub fn iter_movable_tiles(&self) -> impl Iterator<Item = (Coords, TargetableTile)> {
         self.iter_targetable_tiles()
             .filter(|(t, _)| !self.occupied_tiles.contains_key(t))
     }

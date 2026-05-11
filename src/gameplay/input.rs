@@ -3,7 +3,10 @@ use bevy::input::{ButtonState, keyboard::KeyboardInput};
 use crate::prelude::*;
 
 pub(super) fn plugin(app: &mut App) {
-    app.add_systems(Update, (handle_input, move_tile_object));
+    app.add_systems(
+        Update,
+        (handle_input, move_tile_object, tween_tile_char_alpha),
+    );
 }
 
 fn handle_input(
@@ -78,6 +81,28 @@ fn move_tile_object(
         cmd.try_insert_to(
             end_tile.move_char_e,
             TextAlphaLensSrc::new(0.).duration(ms(150)),
+        );
+    }
+}
+
+fn tween_tile_char_alpha(
+    player_q: Option<Single<&TileCoords, (With<player::Player>, Changed<TileCoords>)>>,
+    grid: Option<Single<&mut grid::Grid>>,
+    mut cmd: Commands,
+) {
+    let grid = or_return_quiet!(grid);
+    let player_t = or_return_quiet!(player_q).0;
+    for (t, tt) in grid.iter_targetable_tiles() {
+        let mut alpha = 0.15;
+        let dist = (player_t - t).abs();
+        if t == player_t {
+            alpha = 0.;
+        } else if dist.element_sum() == 1 || (dist.x == dist.y && dist.x == 1) {
+            alpha = 1.;
+        }
+        cmd.try_insert_to(
+            tt.move_char_e,
+            TextAlphaLensSrc::new(alpha).duration(ms(150)),
         );
     }
 }
