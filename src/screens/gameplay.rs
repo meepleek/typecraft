@@ -14,12 +14,12 @@ pub(super) fn plugin(app: &mut App) {
             (pause, spawn_pause_overlay, open_pause_menu).run_if(
                 in_state(Screen::Gameplay)
                     .and(in_state(Menu::None))
-                    .and(input_just_pressed(KeyCode::KeyP).or(input_just_pressed(KeyCode::Escape))),
+                    .and(input_just_pressed(KeyCode::Escape)),
             ),
             close_menu.run_if(
                 in_state(Screen::Gameplay)
                     .and(not(in_state(Menu::None)))
-                    .and(input_just_pressed(KeyCode::KeyP)),
+                    .and(input_just_pressed(KeyCode::Escape)),
             ),
         ),
     );

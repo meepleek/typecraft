@@ -9,6 +9,12 @@ pub fn plugin(_app: &mut App) {}
 #[derive(Component, Debug, Clone, PartialEq, Deref, DerefMut)]
 pub struct TileCoords(pub Coords);
 
+#[derive(Debug, Clone)]
+pub struct TargetableTile {
+    pub move_char: char,
+    pub move_char_e: Entity,
+}
+
 // use this as a single source of truth for both the movement & ability direction
 // to avoid tricky combos like ortho movement + diag attack that could lead to buggy pathfinding
 // this should also simplify the UI & mental overhead for players
@@ -69,14 +75,14 @@ impl TypableWord {
 #[derive(Debug)]
 pub struct TargetableNeighbour {
     pub tile: Coords,
-    pub move_char: char,
+    pub targetable: TargetableTile,
     pub object: Option<TileObject>,
 }
 impl TargetableNeighbour {
     pub fn next_char(&self) -> Option<char> {
         match &self.object {
             Some(to) => to.kind.next_char(),
-            None => Some(self.move_char),
+            None => Some(self.targetable.move_char),
         }
     }
 }

@@ -28,7 +28,7 @@ pub const DIRS: [Coords; 8] = [
 
 pub fn plugin(app: &mut App) {
     app.add_systems(Update, track_grid_position)
-        .add_systems(Last, (add_new_tiles_to_grid, add_new_tile_objects_to_grid));
+        .add_systems(Last, add_new_tile_objects_to_grid);
 }
 
 #[derive(Component)]
@@ -37,13 +37,12 @@ pub struct Grid {
     width: u16,
     heigth: u16,
     center_global_position: Vec2,
-    tile_entities: HashMap<Coords, Entity>,
     occupied_tiles: HashMap<Coords, TileObject>,
     move_chars: HashSet<char>,
     /// Tiles which can contain TileObjects or be moved into
     /// Coords that are not in this map are unbreakable walls
-    targetable_tiles: HashMap<Coords, char>,
-    entities: HashMap<Entity, Coords>,
+    targetable_tiles: HashMap<Coords, TargetableTile>,
+    tile_object_coords: HashMap<Entity, Coords>,
 }
 
 #[derive(Debug, PartialEq, Eq, derive_more::Error, derive_more::Display)]
@@ -78,37 +77,61 @@ impl Grid {
             panic!("Invalid dimension - no dimension can be 0");
         }
 
-        let mut grid = Self {
+        Self {
             width,
             heigth,
-            tile_entities: HashMap::with_capacity((width * heigth) as usize),
             occupied_tiles: HashMap::default(),
             // todo: default to regular QWERTY instead, but make this configurable
             move_chars: "zarstdhneiokjwfpgcluybvm".chars().collect::<HashSet<_>>(),
             targetable_tiles: HashMap::with_capacity((width * heigth) as usize),
-            entities: HashMap::default(),
+            tile_object_coords: HashMap::default(),
             center_global_position: Vec2::ZERO,
-        };
+        }
+    }
 
-        let mut rng = rand::rng();
-        for t in grid
-            .iter_tiles()
-            .filter(|t| t.min_element() > 0 && t.x < width as i16 - 1 && t.y < heigth as i16 - 1)
-        {
-            let neighbour_chars = grid.neighbour_chars(t);
-            for _ in 0..100 {
-                let c = grid
-                    .move_chars
-                    .iter()
-                    .choose(&mut rng)
-                    .expect("Failed to pick random move char");
-                if !neighbour_chars.contains(c) {
-                    grid.targetable_tiles.insert(t, *c);
-                    break;
+    pub fn spawn_targetable_tiles(&mut self, cmd: &mut EntityCommands, player_tile: Coords) {
+        cmd.with_children(|b| {
+            let mut rng = rand::rng();
+            for t in self.iter_tiles().filter(|t| {
+                t.min_element() > 0 && t.x < self.width as i16 - 1 && t.y < self.heigth as i16 - 1
+            }) {
+                let neighbour_chars = self.neighbour_chars(t);
+                for _ in 0..100 {
+                    let c = self
+                        .move_chars
+                        .iter()
+                        .choose(&mut rng)
+                        .expect("Failed to pick random move char");
+                    if !neighbour_chars.contains(c) {
+                        let e = b
+                            .spawn((
+                                Transform::from_translation(
+                                    self.tile_to_world(t)
+                                        .expect("Invalid targetable tile coords")
+                                        .extend(0.),
+                                ),
+                                Text2d::new(*c),
+                                TextFont::from_font_size(40.),
+                                TextColor(Color::WHITE.with_alpha(if t == player_tile {
+                                    0.
+                                } else {
+                                    1.
+                                })), // todo: use relationships? GridTile(grid_e)
+                            ))
+                            .id();
+
+                        self.targetable_tiles.insert(
+                            t,
+                            TargetableTile {
+                                move_char: *c,
+                                move_char_e: e,
+                            },
+                        );
+                        break;
+                    }
                 }
             }
-        }
-        grid
+        });
     }
 
     #[allow(dead_code)]
@@ -128,19 +151,6 @@ impl Grid {
         self.grid_size().as_vec2() * TILE_SIZE as f32
     }
 
-    pub fn add_tile_entity(&mut self, tile: Coords, entity: Entity) -> Result<(), AddTileError> {
-        if !self.within_bounds(tile) {
-            return Err(AddTileError::OutOfBounds);
-        }
-
-        self.tile_entities.insert(tile, entity);
-        Ok(())
-    }
-
-    pub fn get_tile_entity(&self, tile: Coords) -> Option<Entity> {
-        self.tile_entities.get(&tile).cloned()
-    }
-
     pub fn get_player(&self) -> Option<(Coords, Entity)> {
         self.occupied_tiles
             .iter()
@@ -153,7 +163,7 @@ impl Grid {
     }
 
     pub fn entity_to_coords(&self, entity: Entity) -> Option<Coords> {
-        self.entities.get(&entity).cloned()
+        self.tile_object_coords.get(&entity).cloned()
     }
 
     pub fn world_to_tile(&self, pos: Vec2) -> Option<Coords> {
@@ -198,22 +208,32 @@ impl Grid {
         coords: Coords,
     ) -> Result<(), PlaceError> {
         self.can_place_at(coords)?;
-        self.entities.insert(tile_object.entity, coords);
+        self.tile_object_coords.insert(tile_object.entity, coords);
         self.occupied_tiles.insert(coords, tile_object);
 
         Ok(())
     }
 
-    pub fn move_entity(&mut self, entity: Entity, coords: Coords) -> Result<(), MoveError> {
+    pub fn move_entity(
+        &mut self,
+        entity: Entity,
+        coords: Coords,
+    ) -> Result<(TargetableTile, TargetableTile), MoveError> {
         self.can_place_at(coords)?;
-        match self.entities.get(&entity) {
-            Some(prev_tile) => match self.clear_tile(*prev_tile) {
-                Some(tile_obj) => self.place_entity(tile_obj, coords)?,
-                None => panic!("Reverse coords lookup failed"),
-            },
-            None => return Err(MoveError::EntityLookupFailed),
-        }
-        Ok(())
+        let Some(prev_tile) = self.tile_object_coords.get(&entity).copied() else {
+            return Err(MoveError::EntityLookupFailed);
+        };
+        let Some(tile_obj) = self.clear_tile(prev_tile.clone()) else {
+            panic!("Reverse coords lookup failed")
+        };
+        self.place_entity(tile_obj, coords)?;
+        let (Some(prev_tt), Some(new_tt)) = (
+            self.targetable_tiles.get(&prev_tile),
+            self.targetable_tiles.get(&coords),
+        ) else {
+            panic!("Targetable tile not found");
+        };
+        Ok((prev_tt.clone(), new_tt.clone()))
     }
 
     pub fn clear_tile(&mut self, coords: Coords) -> Option<TileObject> {
@@ -242,7 +262,7 @@ impl Grid {
                     None => self
                         .targetable_tiles
                         .get(&target)
-                        .map_or_else(|| Vec::new(), |c| vec![*c]),
+                        .map_or_else(|| Vec::new(), |tt| vec![tt.move_char]),
                 }
             })
             .collect()
@@ -254,9 +274,9 @@ impl Grid {
         move_dir: TileDirection,
     ) -> impl Iterator<Item = TargetableNeighbour> {
         self.neighbours(tile, move_dir).filter_map(move |t| {
-            self.targetable_tiles.get(&t).map(|c| TargetableNeighbour {
+            self.targetable_tiles.get(&t).map(|tt| TargetableNeighbour {
                 tile: t,
-                move_char: *c,
+                targetable: tt.clone(),
                 object: self.occupied_tiles.get(&t).cloned(),
             })
         })
@@ -288,7 +308,7 @@ impl Grid {
 
     pub fn iter_targetable_tiles(&self) -> impl Iterator<Item = (Coords, char)> {
         self.iter_tiles()
-            .filter_map(|t| self.targetable_tiles.get(&t).map(|c| (t, *c)))
+            .filter_map(|t| self.targetable_tiles.get(&t).map(|tt| (t, tt.move_char)))
     }
 
     pub fn iter_movable_tiles(&self) -> impl Iterator<Item = (Coords, char)> {
@@ -319,7 +339,10 @@ impl Grid {
                     TileObjectKind::Enemy(_) => '*',
                     TileObjectKind::Wall(_) => '#',
                 },
-                None => self.targetable_tiles.get(&tile).map_or('■', |c| *c),
+                None => self
+                    .targetable_tiles
+                    .get(&tile)
+                    .map_or('■', |tt| tt.move_char),
             });
         }
         dbg_map.push_str(&format!("{}\n _{}_", size.y - 1, &x_axis));
@@ -332,15 +355,6 @@ fn track_grid_position(
 ) {
     for (mut board, t) in &mut board_q {
         board.center_global_position = t.translation().truncate();
-    }
-}
-
-fn add_new_tiles_to_grid(
-    entity_q: Query<(Entity, &TileCoords), Added<TileCoords>>,
-    mut grid: Single<&mut Grid>,
-) {
-    for (e, tile) in entity_q {
-        grid.add_tile_entity(tile.0, e).expect("invalid tile");
     }
 }
 

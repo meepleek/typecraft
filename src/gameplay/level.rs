@@ -16,12 +16,18 @@ pub fn spawn_level(mut commands: Commands) {
         Transform::default(),
         Visibility::default(),
         DespawnOnExit(Screen::Gameplay),
-        children![Grid::new(10, 12)],
+        children![(
+            Grid::new(10, 12),
+            Transform::default(),
+            Visibility::default(),
+        )],
     ));
 }
 
-pub fn draw_tile_chars(_ev: On<Add, Grid>, mut grid: Single<&mut Grid>, mut cmd: Commands) {
+pub fn draw_tile_chars(_ev: On<Add, Grid>, grid: Single<(Entity, &mut Grid)>, mut cmd: Commands) {
+    let (grid_e, mut grid) = grid.into_inner();
     let player_tile = grid.grid_size().as_i16vec2() / 2;
+    grid.spawn_targetable_tiles(&mut or_return!(cmd.get_entity(grid_e)), player_tile);
     let player_e = cmd
         .spawn((
             player::player(),
@@ -36,15 +42,6 @@ pub fn draw_tile_chars(_ev: On<Add, Grid>, mut grid: Single<&mut Grid>, mut cmd:
         player_tile,
     )
     .expect("Failed to place player");
-
-    for (t, c) in grid.iter_targetable_tiles() {
-        cmd.spawn((
-            Transform::from_translation(grid.tile_to_world(t).unwrap().extend(0.)),
-            Text2d::new(c),
-            TextFont::from_font_size(40.),
-            // todo: use relationships? GridTile(grid_e)
-        ));
-    }
 }
 
 pub fn draw_grid_gizmos(mut gizmos: Gizmos, grid: Option<Single<&Grid>>) {
