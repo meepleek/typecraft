@@ -58,8 +58,8 @@ impl GridTemplate {
                 let pos = grid
                     .tile_to_world(tt.tile)
                     .expect(&format!("Invalid cords {}", tt.tile));
-                let transform =
-                    Transform::from_translation(pos.extend(0.)).with_scale(Vec2::ZERO.extend(1.));
+                let transform = Transform::from_translation(pos.extend(0.));
+                let transform_scale0 = transform.clone().with_scale(Vec2::ZERO.extend(1.));
                 let spawn_targetable_char = match tt.kind {
                     TemplateTileKind::PermaWall => None,
                     TemplateTileKind::Empty => Some(None),
@@ -68,7 +68,7 @@ impl GridTemplate {
                         Some(None)
                     }
                     TemplateTileKind::Player => {
-                        let e = b.spawn((player::player(), transform.clone())).id();
+                        let e = b.spawn((player::player(), transform_scale0.clone())).id();
                         grid.place_entity(
                             tile::TileObject {
                                 entity: e,
@@ -85,11 +85,12 @@ impl GridTemplate {
                         Some(None)
                     }
                 };
-                if let Some(tween_e) = spawn_targetable_char {
-                    // todo: spawn targetable char
-                    // set tile as targetable
-
+                if let Some(tween_e_src) = spawn_targetable_char {
+                    const TWEEN_STEP_MS: u64 = 110;
+                    let tile_dist_to_player = self.player.chebyshev_distance(tt.tile) as u64;
+                    let tween_delay = ms(tile_dist_to_player * TWEEN_STEP_MS);
                     let neighbour_chars = grid.neighbour_chars(tt.tile);
+
                     let mut targetable_char_e = None;
                     for _ in 0..100 {
                         let c = grid
@@ -98,14 +99,36 @@ impl GridTemplate {
                             .choose(&mut rng)
                             .expect("Failed to pick random move char");
                         if !neighbour_chars.contains(c) {
+                            let (t, show_char) = if tween_e_src.is_some() {
+                                (transform, false)
+                            } else {
+                                (transform_scale0, true)
+                            };
+
+                            let start_alpha = if show_char {
+                                tile::TILE_ALPHA_TARGETABLE
+                            } else {
+                                tile::TILE_ALPHA_HIDDEN
+                            };
                             let e = b
                                 .spawn((
-                                    transform,
+                                    t,
                                     Text2d::new(*c),
                                     TextFont::from_font_size(40.),
-                                    TextColor(Color::WHITE),
+                                    TextColor(Color::WHITE.with_alpha(start_alpha)),
                                 ))
                                 .id();
+                            if show_char && tile_dist_to_player != 1 {
+                                b.spawn(
+                                    TextAlphaLensSrc::absolute(
+                                        start_alpha,
+                                        tile::TILE_ALPHA_INACTIVE,
+                                    )
+                                    .duration(ms(210))
+                                    .delay(tween_delay + ms(150))
+                                    .target(e),
+                                );
+                            }
 
                             grid.targetable_tiles.insert(
                                 tt.tile,
@@ -119,15 +142,12 @@ impl GridTemplate {
                         }
                     }
 
-                    let tween_e = tween_e
+                    let tween_e = tween_e_src
                         .unwrap_or(targetable_char_e.expect("Failed to spawn targetable tile"));
-                    const TWEEN_STEP_MS: u64 = 110;
-                    let tween_delay =
-                        ms(self.player.chebyshev_distance(tt.tile) as u64 * TWEEN_STEP_MS);
-                    b.commands_mut().try_insert_to(
-                        tween_e,
+                    b.spawn(
                         TransformScaleLensSrc::new(Vec2::ONE)
                             .duration(ms(400))
+                            .target(tween_e)
                             .delay(tween_delay)
                             .easing(EaseFunction::BackOut),
                     );

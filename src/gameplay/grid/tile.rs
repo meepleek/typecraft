@@ -7,6 +7,11 @@ use crate::prelude::*;
 pub(super) fn plugin(app: &mut App) {
     app.add_systems(Update, (move_tile_object, tween_tile_char_alpha));
 }
+
+pub const TILE_ALPHA_INACTIVE: f32 = 0.15;
+pub const TILE_ALPHA_TARGETABLE: f32 = 1.0;
+pub const TILE_ALPHA_HIDDEN: f32 = 0.0;
+
 #[derive(Component, Debug, Clone, PartialEq, Deref, DerefMut)]
 pub struct TileCoords(pub Coords);
 
@@ -224,12 +229,12 @@ fn tween_tile_char_alpha(
     let grid = or_return_quiet!(grid);
     let player_t = or_return_quiet!(player_q).0;
     for (t, tt) in grid.iter_targetable_tiles() {
-        let mut alpha = 0.15;
+        let mut alpha = TILE_ALPHA_INACTIVE;
         let dist = (player_t - t).abs();
         if t == player_t {
-            alpha = 0.;
+            alpha = TILE_ALPHA_HIDDEN;
         } else if dist.element_sum() == 1 || (dist.x == dist.y && dist.x == 1) {
-            alpha = 1.;
+            alpha = TILE_ALPHA_TARGETABLE;
         }
         cmd.try_insert_to(
             tt.move_char_e,
