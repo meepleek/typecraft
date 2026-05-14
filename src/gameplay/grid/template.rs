@@ -1,0 +1,198 @@
+use std::str::FromStr;
+
+use bevy::math::U16Vec2;
+
+use crate::prelude::*;
+
+#[derive(Debug)]
+pub struct TemplateTile {
+    tile: Coords,
+    kind: TemplateTileKind,
+}
+
+#[derive(Debug)]
+pub enum TemplateTileKind {
+    PermaWall,
+    Empty,
+    Wall,
+    Player,
+    Goal,
+    // Enemy,
+}
+impl TemplateTileKind {
+    pub const PERMAWALL: char = '#';
+    pub const EMPTY: char = '.';
+    pub const WALL: char = 'W';
+    pub const PLAYER: char = '@';
+    pub const GOAL: char = 'G';
+    // pub const ENEMY: char = '#';
+}
+
+impl TryFrom<char> for TemplateTileKind {
+    type Error = String;
+
+    fn try_from(value: char) -> Result<Self, Self::Error> {
+        match value {
+            Self::PERMAWALL => Ok(Self::PermaWall),
+            Self::EMPTY => Ok(Self::Empty),
+            Self::WALL => Ok(Self::Wall),
+            Self::PLAYER => Ok(Self::Player),
+            Self::GOAL => Ok(Self::Goal),
+            _ => Err(format!("Unknown tile char {value}")),
+        }
+    }
+}
+
+pub struct GridTemplate {
+    size: U16Vec2,
+    tiles: Vec<TemplateTile>,
+    player: Coords,
+    goal: Coords,
+}
+impl GridTemplate {
+    pub fn spawn<'a>(self, e_cmd: &'a mut EntityCommands<'a>) -> &'a mut EntityCommands<'a> {
+        e_cmd.with_children(|b| {
+            let mut rng = rand::rng();
+            let mut grid = grid::Grid::new(self.size.x, self.size.y);
+            for tt in self.tiles {
+                let pos = grid
+                    .tile_to_world(tt.tile)
+                    .expect(&format!("Invalid cords {}", tt.tile));
+                let transform =
+                    Transform::from_translation(pos.extend(0.)).with_scale(Vec2::ZERO.extend(1.));
+                let spawn_targetable_char = match tt.kind {
+                    TemplateTileKind::PermaWall => None,
+                    TemplateTileKind::Empty => Some(None),
+                    TemplateTileKind::Wall => {
+                        // todo: wall
+                        Some(None)
+                    }
+                    TemplateTileKind::Player => {
+                        let e = b.spawn((player::player(), transform.clone())).id();
+                        grid.place_entity(
+                            tile::TileObject {
+                                entity: e,
+                                kind: tile::TileObjectKind::Player,
+                            },
+                            tt.tile,
+                        )
+                        .expect("Failed to place tile object");
+
+                        Some(Some(e))
+                    }
+                    TemplateTileKind::Goal => {
+                        // todo: goal
+                        Some(None)
+                    }
+                };
+                if let Some(tween_e) = spawn_targetable_char {
+                    // todo: spawn targetable char
+                    // set tile as targetable
+
+                    let neighbour_chars = grid.neighbour_chars(tt.tile);
+                    let mut targetable_char_e = None;
+                    for _ in 0..100 {
+                        let c = grid
+                            .move_chars
+                            .iter()
+                            .choose(&mut rng)
+                            .expect("Failed to pick random move char");
+                        if !neighbour_chars.contains(c) {
+                            let e = b
+                                .spawn((
+                                    transform,
+                                    Text2d::new(*c),
+                                    TextFont::from_font_size(40.),
+                                    TextColor(Color::WHITE),
+                                ))
+                                .id();
+
+                            grid.targetable_tiles.insert(
+                                tt.tile,
+                                tile::TargetableTile {
+                                    move_char: *c,
+                                    move_char_e: e,
+                                },
+                            );
+                            targetable_char_e = Some(e);
+                            break;
+                        }
+                    }
+
+                    let tween_e = tween_e
+                        .unwrap_or(targetable_char_e.expect("Failed to spawn targetable tile"));
+                    const TWEEN_STEP_MS: u64 = 110;
+                    let tween_delay =
+                        ms(self.player.chebyshev_distance(tt.tile) as u64 * TWEEN_STEP_MS);
+                    b.commands_mut().try_insert_to(
+                        tween_e,
+                        TransformScaleLensSrc::new(Vec2::ONE)
+                            .duration(ms(400))
+                            .delay(tween_delay)
+                            .easing(EaseFunction::BackOut),
+                    );
+                }
+            }
+
+            b.spawn((grid, Transform::default(), Visibility::default()));
+        });
+        e_cmd
+    }
+}
+
+impl FromStr for GridTemplate {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut size = Coords::ZERO;
+        let mut errors = Vec::new();
+        let mut tiles = Vec::with_capacity(s.len());
+        let mut player = None;
+        let mut goal = None;
+
+        for (tile, c) in s
+            .lines()
+            .filter(|l| !l.trim().is_empty())
+            .enumerate()
+            .flat_map(|(y, line)| {
+                line.chars()
+                    .enumerate()
+                    .map(move |(x, c)| (Coords::new(x as i16, y as i16), c))
+            })
+        {
+            size = size.max(tile);
+            match TemplateTileKind::try_from(c) {
+                Ok(kind) => {
+                    match kind {
+                        TemplateTileKind::Player => player = Some(tile),
+                        TemplateTileKind::Goal => goal = Some(tile),
+                        _ => {}
+                    }
+
+                    tiles.push(TemplateTile { tile, kind });
+                }
+                Err(_) => {
+                    errors.push(format!("Invalid char '{c}'"));
+                }
+            }
+        }
+
+        if player.is_none() {
+            errors.push("No player".to_string());
+        }
+        if goal.is_none() {
+            errors.push("No goal".to_string());
+        }
+
+        if errors.is_empty() {
+            Ok(GridTemplate {
+                size: (size + Coords::ONE).as_u16vec2(),
+                tiles,
+                player: player.unwrap(),
+                goal: goal.unwrap(),
+            })
+        } else {
+            Err(errors.join("\n"))
+        }
+    }
+}

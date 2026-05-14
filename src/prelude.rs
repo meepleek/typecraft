@@ -30,7 +30,7 @@ pub use mplk_utils::prelude::*;
 
 pub use crate::gameplay::{
     grid::{
-        Coords, grid,
+        Coords, grid, template,
         tile::{self, TileCoords},
     },
     player,

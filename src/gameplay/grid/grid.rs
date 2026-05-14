@@ -38,10 +38,10 @@ pub struct Grid {
     heigth: u16,
     center_global_position: Vec2,
     occupied_tiles: HashMap<Coords, TileObject>,
-    move_chars: HashSet<char>,
+    pub move_chars: HashSet<char>,
     /// Tiles which can contain TileObjects or be moved into
     /// Coords that are not in this map are unbreakable walls
-    targetable_tiles: HashMap<Coords, TargetableTile>,
+    pub targetable_tiles: HashMap<Coords, TargetableTile>,
     tile_object_coords: HashMap<Entity, Coords>,
 }
 
@@ -87,51 +87,6 @@ impl Grid {
             tile_object_coords: HashMap::default(),
             center_global_position: Vec2::ZERO,
         }
-    }
-
-    pub fn spawn_targetable_tiles(&mut self, cmd: &mut EntityCommands, player_tile: Coords) {
-        cmd.with_children(|b| {
-            let mut rng = rand::rng();
-            for t in self.iter_tiles().filter(|t| {
-                t.min_element() > 0 && t.x < self.width as i16 - 1 && t.y < self.heigth as i16 - 1
-            }) {
-                let neighbour_chars = self.neighbour_chars(t);
-                for _ in 0..100 {
-                    let c = self
-                        .move_chars
-                        .iter()
-                        .choose(&mut rng)
-                        .expect("Failed to pick random move char");
-                    if !neighbour_chars.contains(c) {
-                        let e = b
-                            .spawn((
-                                Transform::from_translation(
-                                    self.tile_to_world(t)
-                                        .expect("Invalid targetable tile coords")
-                                        .extend(0.),
-                                ),
-                                Text2d::new(*c),
-                                TextFont::from_font_size(40.),
-                                TextColor(Color::WHITE.with_alpha(if t == player_tile {
-                                    0.
-                                } else {
-                                    1.
-                                })), // todo: use relationships? GridTile(grid_e)
-                            ))
-                            .id();
-
-                        self.targetable_tiles.insert(
-                            t,
-                            TargetableTile {
-                                move_char: *c,
-                                move_char_e: e,
-                            },
-                        );
-                        break;
-                    }
-                }
-            }
-        });
     }
 
     #[allow(dead_code)]
@@ -181,7 +136,7 @@ impl Grid {
     }
 
     pub fn tile_to_world(&self, tile: Coords) -> Option<Vec2> {
-        if tile.min_element() < 0 || tile.x >= self.width as i16 || tile.y >= self.heigth as i16 {
+        if !self.within_bounds(tile) {
             return None;
         }
 
