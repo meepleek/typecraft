@@ -87,8 +87,8 @@ impl GridTemplate {
                 };
                 if let Some(tween_e_src) = spawn_targetable_char {
                     const TWEEN_STEP_MS: u64 = 110;
-                    let tile_dist_to_player = self.player.chebyshev_distance(tt.tile) as u64;
-                    let tween_delay = ms(tile_dist_to_player * TWEEN_STEP_MS);
+                    let tile_dist_to_player = self.player.chebyshev_distance(tt.tile);
+                    let tween_delay = ms(tile_dist_to_player as u64 * TWEEN_STEP_MS);
                     let neighbour_chars = grid.neighbour_chars(tt.tile);
 
                     let mut targetable_char_e = None;
@@ -116,6 +116,10 @@ impl GridTemplate {
                                     Text2d::new(*c),
                                     TextFont::from_font_size(40.),
                                     TextColor(Color::WHITE.with_alpha(start_alpha)),
+                                    tile::CharWiggle::new(
+                                        ms(rng.random_range(0..5_000)),
+                                        tile_dist_to_player,
+                                    ),
                                 ))
                                 .id();
                             if show_char && tile_dist_to_player != 1 {

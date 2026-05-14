@@ -1,11 +1,20 @@
 #![allow(dead_code)]
 
 use bevy::math::U16Vec2;
+use mplk_utils::math::asymptotic_smoothing_with_delta_time;
 
 use crate::prelude::*;
 
 pub(super) fn plugin(app: &mut App) {
-    app.add_systems(Update, (move_tile_object, tween_tile_char_alpha));
+    app.add_systems(
+        Update,
+        (
+            move_tile_object,
+            tween_tile_char_alpha,
+            update_tile_char_wiggle_target_speed,
+            wiggle_tile_char,
+        ),
+    );
 }
 
 pub const TILE_ALPHA_INACTIVE: f32 = 0.15;
@@ -240,5 +249,57 @@ fn tween_tile_char_alpha(
             tt.move_char_e,
             TextAlphaLensSrc::new(alpha).duration(ms(150)),
         );
+    }
+}
+
+#[derive(Component, Debug)]
+pub struct CharWiggle {
+    offset: Duration,
+    target_speed: f32,
+}
+impl CharWiggle {
+    pub fn new(anim_offset: Duration, chess_distance: u16) -> Self {
+        let speed = Self::target_speed(chess_distance);
+        Self {
+            offset: anim_offset,
+            target_speed: speed,
+        }
+    }
+
+    fn update_target_speed(&mut self, chess_distance: u16) {
+        self.target_speed = Self::target_speed(chess_distance);
+    }
+
+    fn target_speed(chess_distance: u16) -> f32 {
+        if chess_distance <= 1 { 2.25 } else { 1.15 }
+    }
+}
+
+fn update_tile_char_wiggle_target_speed(
+    player_q: Option<Single<&TileCoords, (With<player::Player>, Changed<TileCoords>)>>,
+    grid: Option<Single<&mut grid::Grid>>,
+    mut wiggle_q: Query<&mut CharWiggle>,
+) {
+    let grid = or_return_quiet!(grid);
+    let player_t = or_return_quiet!(player_q).0;
+    for (t, tt) in grid.iter_targetable_tiles() {
+        let mut char_rotation = or_continue!(wiggle_q.get_mut(tt.move_char_e));
+        char_rotation.update_target_speed(player_t.chebyshev_distance(t));
+    }
+}
+
+fn wiggle_tile_char(mut rotation_q: Query<(&CharWiggle, &mut Transform)>, time: Res<Time>) {
+    for (rot, mut t) in &mut rotation_q {
+        let max_deg: f32 = 15.;
+        let mult = ((time.elapsed_secs() + rot.offset.as_secs_f32()) * rot.target_speed).sin();
+        let target_deg = max_deg * mult;
+        // todo: this can jump a lil bit, so ideally just fix that the rotation should continue from the same point, but just the speed should be updated
+        let rot_deg = asymptotic_smoothing_with_delta_time(
+            t.rotation.to_rot2().as_degrees(),
+            target_deg,
+            0.25,
+            time.delta_secs(),
+        );
+        t.rotation = Quat::from_rotation_z(rot_deg.to_radians());
     }
 }
