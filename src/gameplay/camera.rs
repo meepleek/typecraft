@@ -19,10 +19,12 @@ fn track_player(
     let (_, player_e) = or_return!(grid.get_player());
     let player_t = or_return!(trans_q.get(player_e));
     // todo: bounds checking
-    cam_t.translation = asymptotic_smoothing_with_delta_time(
-        cam_t.translation,
-        player_t.translation(),
-        0.1,
-        time.delta_secs(),
-    );
+    let cam_pos = cam_t.translation;
+    let player_pos = player_t.translation();
+    let dist_sq = cam_pos.distance_squared(player_pos);
+    cam_t.translation = if dist_sq < 100_000. {
+        asymptotic_smoothing_with_delta_time(cam_pos, player_pos, 0.1, time.delta_secs())
+    } else {
+        player_pos
+    };
 }
