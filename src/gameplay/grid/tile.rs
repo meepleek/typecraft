@@ -237,7 +237,7 @@ fn tween_tile_char_alpha(
 ) {
     let grid = or_return_quiet!(grid);
     let player_t = or_return_quiet!(player_q).0;
-    for (t, tt) in grid.iter_targetable_tiles() {
+    for (t, tt) in grid.iter_movable_tiles(true) {
         let mut alpha = TILE_ALPHA_INACTIVE;
         let dist = (player_t - t).abs();
         if t == player_t {

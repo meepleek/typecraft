@@ -266,9 +266,19 @@ impl Grid {
             .filter_map(|t| self.targetable_tiles.get(&t).map(|tt| (t, tt.clone())))
     }
 
-    pub fn iter_movable_tiles(&self) -> impl Iterator<Item = (Coords, TargetableTile)> {
-        self.iter_targetable_tiles()
-            .filter(|(t, _)| !self.occupied_tiles.contains_key(t))
+    pub fn iter_movable_tiles(
+        &self,
+        include_player_tile: bool,
+    ) -> impl Iterator<Item = (Coords, TargetableTile)> {
+        let player = if include_player_tile {
+            self.get_player()
+        } else {
+            None
+        };
+        self.iter_targetable_tiles().filter(move |(t, _)| {
+            !self.occupied_tiles.contains_key(t)
+                || (include_player_tile && player.is_some_and(|(player_tile, _)| player_tile == *t))
+        })
     }
 
     #[allow(dead_code)]

@@ -2,7 +2,7 @@ use std::str::FromStr;
 
 use bevy::math::U16Vec2;
 
-use crate::prelude::*;
+use crate::{gameplay::wall, prelude::*};
 
 #[derive(Debug)]
 pub struct TemplateTile {
@@ -62,10 +62,19 @@ impl GridTemplate {
                 let transform_scale0 = transform.clone().with_scale(Vec2::ZERO.extend(1.));
                 let spawn_targetable_char = match tt.kind {
                     TemplateTileKind::PermaWall => None,
-                    TemplateTileKind::Empty => Some(None),
+                    TemplateTileKind::Empty => Some((None, true)),
                     TemplateTileKind::Wall => {
-                        // todo: wall
-                        Some(None)
+                        let e = b.spawn((wall::wall(), transform_scale0.clone())).id();
+                        grid.place_entity(
+                            tile::TileObject {
+                                entity: e,
+                                kind: tile::TileObjectKind::wall("WALL"),
+                            },
+                            tt.tile,
+                        )
+                        .expect("Failed to place tile object");
+
+                        Some((Some(e), false))
                     }
                     TemplateTileKind::Player => {
                         let e = b.spawn((player::player(), transform_scale0.clone())).id();
@@ -78,14 +87,14 @@ impl GridTemplate {
                         )
                         .expect("Failed to place tile object");
 
-                        Some(Some(e))
+                        Some((Some(e), false))
                     }
                     TemplateTileKind::Goal => {
                         // todo: goal
-                        Some(None)
+                        Some((None, true))
                     }
                 };
-                if let Some(tween_e_src) = spawn_targetable_char {
+                if let Some((tween_e_src, show_char)) = spawn_targetable_char {
                     const TWEEN_STEP_MS: u64 = 110;
                     let tile_dist_to_player = self.player.chebyshev_distance(tt.tile);
                     let tween_delay = ms(tile_dist_to_player as u64 * TWEEN_STEP_MS);
@@ -99,16 +108,10 @@ impl GridTemplate {
                             .choose(&mut rng)
                             .expect("Failed to pick random move char");
                         if !neighbour_chars.contains(c) {
-                            let (t, show_char) = if tween_e_src.is_some() {
-                                (transform, false)
+                            let (t, start_alpha) = if show_char {
+                                (transform_scale0, tile::TILE_ALPHA_TARGETABLE)
                             } else {
-                                (transform_scale0, true)
-                            };
-
-                            let start_alpha = if show_char {
-                                tile::TILE_ALPHA_TARGETABLE
-                            } else {
-                                tile::TILE_ALPHA_HIDDEN
+                                (transform, tile::TILE_ALPHA_HIDDEN)
                             };
                             let e = b
                                 .spawn((
@@ -122,7 +125,7 @@ impl GridTemplate {
                                     ),
                                 ))
                                 .id();
-                            if show_char && tile_dist_to_player != 1 {
+                            if show_char && tile_dist_to_player > 1 {
                                 b.spawn(
                                     TextAlphaLensSrc::absolute(
                                         start_alpha,

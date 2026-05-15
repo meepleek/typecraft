@@ -5,6 +5,7 @@ pub mod grid;
 pub mod input;
 pub mod level;
 pub mod player;
+pub mod wall;
 
 pub(super) fn plugin(app: &mut App) {
     app.add_plugins((
@@ -13,5 +14,6 @@ pub(super) fn plugin(app: &mut App) {
         grid::plugin,
         input::plugin,
         camera::plugin,
+        wall::plugin,
     ));
 }
