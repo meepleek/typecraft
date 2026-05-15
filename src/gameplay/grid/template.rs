@@ -64,7 +64,9 @@ impl GridTemplate {
                     TemplateTileKind::PermaWall => None,
                     TemplateTileKind::Empty => Some((None, true)),
                     TemplateTileKind::Wall => {
-                        let e = b.spawn((wall::wall(), transform_scale0.clone())).id();
+                        // let neighbour_chars = grid.neighbour_chars(tt.tile);
+
+                        let e = b.spawn((wall::wall("WALL"), transform_scale0.clone())).id();
                         grid.place_entity(
                             tile::TileObject {
                                 entity: e,
