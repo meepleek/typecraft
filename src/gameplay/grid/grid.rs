@@ -204,7 +204,7 @@ impl Grid {
         TileIterator::centered(U16Vec2::splat(5))
             .flat_map(|dir| {
                 let target = tile + dir;
-                if !self.within_bounds(target) {
+                if !self.within_bounds(target) || dir == Coords::ZERO {
                     return Vec::new();
                 }
                 match self.occupied_tiles.get(&target) {
