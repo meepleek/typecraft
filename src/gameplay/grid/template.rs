@@ -47,6 +47,7 @@ pub struct GridTemplate {
     size: U16Vec2,
     tiles: Vec<TemplateTile>,
     player: Coords,
+    #[expect(dead_code)]
     goal: Coords,
 }
 impl GridTemplate {

@@ -6,6 +6,7 @@ pub mod input;
 pub mod level;
 pub mod player;
 pub mod wall;
+pub mod wordlist;
 
 pub(super) fn plugin(app: &mut App) {
     app.add_plugins((
@@ -15,5 +16,6 @@ pub(super) fn plugin(app: &mut App) {
         input::plugin,
         camera::plugin,
         wall::plugin,
+        wordlist::plugin,
     ));
 }
