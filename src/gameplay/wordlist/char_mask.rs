@@ -5,6 +5,7 @@ use crate::prelude::*;
 #[derive(Debug, PartialEq, Clone, Copy, Deref, DerefMut)]
 pub struct CharMask(u32);
 impl CharMask {
+    // mask bits for a-z
     const LETTER_MASK: u32 = (1 << (b'z' - b'a' + 1)) - 1;
 
     pub fn allow(char_bytes: impl Iterator<Item = u8>) -> Self {
@@ -21,9 +22,8 @@ impl CharMask {
 
     fn mask(char_bytes: impl Iterator<Item = u8>, allow: bool) -> u32 {
         let mut mask = 0;
-        let idx_offset = b'a';
         for char_byte in char_bytes {
-            let bit = char_byte - idx_offset;
+            let bit = char_byte - b'a';
             mask |= 1 << bit;
         }
         if !allow {
@@ -42,6 +42,11 @@ mod tests {
     use tracing_test::traced_test;
 
     use super::*;
+
+    #[test]
+    fn letter_mask() {
+        assert_eq!(CharMask::LETTER_MASK, 0b11111111111111111111111111)
+    }
 
     #[test_case("a" => 0b1)]
     #[test_case("c" => 0b100)]
