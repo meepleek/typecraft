@@ -33,7 +33,7 @@ pub use crate::gameplay::{
         Coords, grid, template,
         tile::{self, TileCoords},
     },
-    player,
+    player, wordlist,
 };
 pub use crate::screens::Screen;
 pub use crate::theme::palette::*;
