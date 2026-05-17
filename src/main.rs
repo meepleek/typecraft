@@ -5,6 +5,7 @@
 
 use bevy::{asset::AssetMetaCheck, prelude::*};
 
+mod assets;
 mod audio;
 #[cfg(feature = "dev")]
 mod dev_tools;
@@ -54,6 +55,7 @@ impl Plugin for AppPlugin {
             menus::plugin,
             screens::plugin,
             theme::plugin,
+            assets::plugin,
         ));
 
         // Order new `AppSystems` variants by adding them here:

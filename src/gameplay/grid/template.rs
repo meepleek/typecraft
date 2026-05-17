@@ -51,7 +51,11 @@ pub struct GridTemplate {
     goal: Coords,
 }
 impl GridTemplate {
-    pub fn spawn<'a>(self, e_cmd: &'a mut EntityCommands<'a>) -> &'a mut EntityCommands<'a> {
+    pub fn spawn<'a>(
+        self,
+        e_cmd: &'a mut EntityCommands<'a>,
+        wordlist: &WordList,
+    ) -> &'a mut EntityCommands<'a> {
         e_cmd.with_children(|b| {
             let mut rng = rand::rng();
             let mut grid = grid::Grid::new(self.size.x, self.size.y);
@@ -65,13 +69,23 @@ impl GridTemplate {
                     TemplateTileKind::PermaWall => None,
                     TemplateTileKind::Empty => Some((None, true)),
                     TemplateTileKind::Wall => {
-                        // let neighbour_chars = grid.neighbour_chars(tt.tile);
+                        let neighbour_chars = grid.neighbour_chars(tt.tile);
+                        let neighbour_mask =
+                            CharMask::deny(neighbour_chars.iter().collect::<String>().bytes());
+                        let word = wordlist
+                            .iter(3..=4)
+                            .filter(|w| w.matches(neighbour_mask))
+                            .choose(&mut rng)
+                            .expect("Failed to find a wall word")
+                            .text();
 
-                        let e = b.spawn((wall::wall("WALL"), transform_scale0.clone())).id();
+                        let e = b
+                            .spawn((wall::wall(word.clone()), transform_scale0.clone()))
+                            .id();
                         grid.place_entity(
                             tile::TileObject {
                                 entity: e,
-                                kind: tile::TileObjectKind::wall("WALL"),
+                                kind: tile::TileObjectKind::wall(word),
                             },
                             tt.tile,
                         )

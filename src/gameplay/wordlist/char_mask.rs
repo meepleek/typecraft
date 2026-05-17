@@ -1,8 +1,6 @@
-#![allow(dead_code)]
-
 use crate::prelude::*;
 
-#[derive(Debug, PartialEq, Clone, Copy, Deref, DerefMut)]
+#[derive(Debug, PartialEq, Clone, Copy, Deref, DerefMut, Reflect)]
 pub struct CharMask(u32);
 impl CharMask {
     // mask bits for a-z
