@@ -32,7 +32,7 @@ fn handle_input(
         .collect::<Vec<_>>();
     for c in input_chars {
         let targetable_neighbours = grid
-            .targetable_neighbours(player_tile, tile::TileDirection::All)
+            .targetable_neighbours(player_tile, tile::TileDirection::Orthogonal)
             .filter(|tn| tn.next_char().is_some_and(|tile_c| tile_c == c))
             .collect::<Vec<_>>();
         if targetable_neighbours.len() > 1 {

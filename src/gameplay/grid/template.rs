@@ -69,9 +69,12 @@ impl GridTemplate {
                     TemplateTileKind::PermaWall => None,
                     TemplateTileKind::Empty => Some((None, true)),
                     TemplateTileKind::Wall => {
-                        let neighbour_chars = grid.neighbour_chars(tt.tile);
+                        let neighbour_chars = grid.ortho_conflict_chars(tt.tile);
                         let neighbour_mask =
                             CharMask::deny(neighbour_chars.iter().collect::<String>().bytes());
+                        // let neighbour_mask = CharMask::deny(
+                        //     /*neighbour_chars.iter().collect::<String>()*/ "".bytes(),
+                        // );
                         let word = wordlist
                             .iter(3..=4)
                             .filter(|w| w.matches(neighbour_mask))
@@ -113,9 +116,10 @@ impl GridTemplate {
                 };
                 if let Some((tween_e_src, show_char)) = spawn_targetable_char {
                     const TWEEN_STEP_MS: u64 = 110;
-                    let tile_dist_to_player = self.player.chebyshev_distance(tt.tile);
-                    let tween_delay = ms(tile_dist_to_player as u64 * TWEEN_STEP_MS);
-                    let neighbour_chars = grid.neighbour_chars(tt.tile);
+                    let chess_dist_to_player = self.player.chebyshev_distance(tt.tile);
+                    let manhattan_dist_to_player = self.player.manhattan_distance(tt.tile);
+                    let tween_delay = ms(chess_dist_to_player as u64 * TWEEN_STEP_MS);
+                    let neighbour_chars = grid.ortho_conflict_chars(tt.tile);
 
                     let mut targetable_char_e = None;
                     for _ in 0..100 {
@@ -138,11 +142,11 @@ impl GridTemplate {
                                     TextColor(Color::WHITE.with_alpha(start_alpha)),
                                     tile::CharWiggle::new(
                                         ms(rng.random_range(0..5_000)),
-                                        tile_dist_to_player,
+                                        chess_dist_to_player,
                                     ),
                                 ))
                                 .id();
-                            if show_char && tile_dist_to_player > 1 {
+                            if show_char && manhattan_dist_to_player > 1 {
                                 b.spawn(
                                     TextAlphaLensSrc::absolute(
                                         start_alpha,

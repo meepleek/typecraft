@@ -239,10 +239,10 @@ fn tween_tile_char_alpha(
     let player_t = or_return_quiet!(player_q).0;
     for (t, tt) in grid.iter_movable_tiles(true) {
         let mut alpha = TILE_ALPHA_INACTIVE;
-        let dist = (player_t - t).abs();
+        let dist_manhattan = player_t.manhattan_distance(t);
         if t == player_t {
             alpha = TILE_ALPHA_HIDDEN;
-        } else if dist.element_sum() == 1 || (dist.x == dist.y && dist.x == 1) {
+        } else if dist_manhattan == 1 {
             alpha = TILE_ALPHA_TARGETABLE;
         }
         cmd.try_insert_to(

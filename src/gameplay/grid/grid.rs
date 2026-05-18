@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use bevy::math::U16Vec2;
+use bevy::math::{I16Vec2, U16Vec2};
 use bevy::platform::collections::HashMap;
 
 use crate::prelude::*;
@@ -72,6 +72,19 @@ impl From<PlaceError> for MoveError {
 }
 
 impl Grid {
+    const DIRS_ORTHO_CONFLICT: &[I16Vec2] = &[
+        // diagonals - direct ortho neighbours can actually never conflict when actions are just ortho
+        I16Vec2::NEG_ONE,
+        I16Vec2::ONE,
+        I16Vec2::new(-1, 1),
+        I16Vec2::new(1, -1),
+        // ortho 2 tiles away
+        I16Vec2::new(0, 2),
+        I16Vec2::new(2, 0),
+        I16Vec2::new(0, -2),
+        I16Vec2::new(-2, 0),
+    ];
+
     pub fn new(width: u16, heigth: u16) -> Self {
         if width == 0 || heigth == 0 {
             panic!("Invalid dimension - no dimension can be 0");
@@ -199,12 +212,14 @@ impl Grid {
         tile.min_element() >= 0 && tile.x < self.width as _ && tile.y < self.heigth as _
     }
 
-    pub fn neighbour_chars(&self, tile: Coords) -> HashSet<char> {
+    /// Characters of tiles that could conflict when using orthogonal actions
+    pub fn ortho_conflict_chars(&self, tile: Coords) -> HashSet<char> {
         // area spanning 2 into each direction to avoid using the same chars for opposite neighbours of a character
-        TileIterator::centered(U16Vec2::splat(5))
+        Self::DIRS_ORTHO_CONFLICT
+            .iter()
             .flat_map(|dir| {
                 let target = tile + dir;
-                if !self.within_bounds(target) || dir == Coords::ZERO {
+                if !self.within_bounds(target) || *dir == Coords::ZERO {
                     return Vec::new();
                 }
                 match self.occupied_tiles.get(&target) {
