@@ -72,23 +72,31 @@ impl GridTemplate {
                         let neighbour_chars = grid.ortho_conflict_chars(tt.tile);
                         let neighbour_mask =
                             CharMask::deny(neighbour_chars.iter().collect::<String>().bytes());
-                        // let neighbour_mask = CharMask::deny(
-                        //     /*neighbour_chars.iter().collect::<String>()*/ "".bytes(),
-                        // );
+                        // todo: use a char from the first word as the move char of the tile
                         let word = wordlist
                             .iter(3..=4)
                             .filter(|w| w.matches(neighbour_mask))
                             .choose(&mut rng)
-                            .expect("Failed to find a wall word")
-                            .text();
+                            .expect("Failed to find a wall word");
+                        let first_word_mask = word.mask();
+                        let mut words = wordlist
+                            .iter(3..=4)
+                            .filter(|w| *w != word && w.matches(first_word_mask))
+                            .choose_multiple(&mut rng, 2)
+                            .iter()
+                            .map(|w| w.text())
+                            .collect::<Vec<_>>();
+                        words.push(word.text());
+                        words.shuffle(&mut rng);
+                        tracing::warn!(?words);
 
                         let e = b
-                            .spawn((wall::wall(word.clone()), transform_scale0.clone()))
+                            .spawn((wall::wall(word.text()), transform_scale0.clone()))
                             .id();
                         grid.place_entity(
                             tile::TileObject {
                                 entity: e,
-                                kind: tile::TileObjectKind::wall(word),
+                                kind: tile::TileObjectKind::wall(words),
                             },
                             tt.tile,
                         )
@@ -181,6 +189,13 @@ impl GridTemplate {
                     );
                 }
             }
+
+            // todo: do a couple of refining wall words iterations
+            // grab wall tiles
+            // randomise their order
+            // then sort by number of words (lowest first)
+            // then add/replace words based on any available neighbour words
+            // one word at a time to allow other words to also expand their mask beyond the initial word
 
             b.spawn((grid, Transform::default(), Visibility::default()));
         });

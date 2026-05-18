@@ -224,8 +224,9 @@ impl Grid {
                 }
                 match self.occupied_tiles.get(&target) {
                     Some(tile_obj) => match tile_obj.kind {
-                        TileObjectKind::Enemy(ref word) | TileObjectKind::Wall(ref word) => {
-                            word.chars.clone()
+                        TileObjectKind::Enemy(ref word) => word.chars.clone(),
+                        TileObjectKind::Wall(ref words) => {
+                            words.words.iter().flat_map(|w| w.chars.clone()).collect()
                         }
                         TileObjectKind::Player => Vec::new(),
                     },
@@ -456,7 +457,7 @@ mod tests {
                 .place_entity(
                     TileObject {
                         entity: Entity::PLACEHOLDER,
-                        kind: TileObjectKind::wall("Wall"),
+                        kind: TileObjectKind::wall(vec!["Wall"]),
                     },
                     tile.into(),
                 )

@@ -1,7 +1,7 @@
 use crate::prelude::*;
 use wordlist::char_mask::CharMask;
 
-#[derive(Reflect, Debug, Clone)]
+#[derive(Reflect, Debug, PartialEq, Clone)]
 pub struct Word {
     word: String,
     mask: CharMask,
@@ -19,6 +19,10 @@ impl Word {
 
     pub fn len(&self) -> usize {
         self.len
+    }
+
+    pub fn mask(&self) -> CharMask {
+        self.mask
     }
 
     pub fn matches(&self, mask: CharMask) -> bool {

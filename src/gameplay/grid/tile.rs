@@ -50,21 +50,22 @@ pub struct TileObject {
 pub enum TileObjectKind {
     Player,
     Enemy(TypableWord),
-    Wall(TypableWord),
+    Wall(TypableWords),
 }
 impl TileObjectKind {
     pub fn enemy(word: impl Into<String>) -> Self {
         TileObjectKind::Enemy(TypableWord::new(word.into().chars().collect::<Vec<_>>()))
     }
 
-    pub fn wall(word: impl Into<String>) -> Self {
-        TileObjectKind::Wall(TypableWord::new(word.into().chars().collect::<Vec<_>>()))
+    pub fn wall<TText: Into<String>>(words: impl IntoIterator<Item = TText>) -> Self {
+        TileObjectKind::Wall(TypableWords::new(words))
     }
 
     pub fn next_char(&self) -> Option<char> {
         match self {
             Self::Player => None,
-            Self::Enemy(word) | Self::Wall(word) => word.next_char(),
+            Self::Enemy(word) => word.next_char(),
+            Self::Wall(words) => words.next_char(),
         }
     }
 }
@@ -84,6 +85,29 @@ impl TypableWord {
 
     pub fn next_char(&self) -> Option<char> {
         self.chars.get(self.completed_count).copied()
+    }
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct TypableWords {
+    pub words: Vec<TypableWord>,
+    completed_word_count: usize,
+}
+impl TypableWords {
+    pub fn new<TText: Into<String>>(words: impl IntoIterator<Item = TText>) -> Self {
+        Self {
+            completed_word_count: 0,
+            words: words
+                .into_iter()
+                .map(|w| TypableWord::new(w.into().chars().collect::<Vec<_>>()))
+                .collect(),
+        }
+    }
+
+    pub fn next_char(&self) -> Option<char> {
+        self.words
+            .get(self.completed_word_count)
+            .and_then(TypableWord::next_char)
     }
 }
 
