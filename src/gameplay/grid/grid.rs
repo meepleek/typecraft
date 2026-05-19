@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use bevy::math::{I16Vec2, U16Vec2};
+use bevy::math::U16Vec2;
 use bevy::platform::collections::HashMap;
 
 use crate::prelude::*;
@@ -34,11 +34,9 @@ pub fn plugin(app: &mut App) {
 #[derive(Component)]
 #[require(Transform)]
 pub struct Grid {
-    width: u16,
-    heigth: u16,
+    size: U16Vec2,
     center_global_position: Vec2,
     occupied_tiles: HashMap<Coords, TileObject>,
-    pub move_chars: HashSet<char>,
     /// Tiles which can contain TileObjects or be moved into
     /// Coords that are not in this map are unbreakable walls
     pub targetable_tiles: HashMap<Coords, TargetableTile>,
@@ -72,31 +70,16 @@ impl From<PlaceError> for MoveError {
 }
 
 impl Grid {
-    const DIRS_ORTHO_CONFLICT: &[I16Vec2] = &[
-        // diagonals - direct ortho neighbours can actually never conflict when actions are just ortho
-        I16Vec2::NEG_ONE,
-        I16Vec2::ONE,
-        I16Vec2::new(-1, 1),
-        I16Vec2::new(1, -1),
-        // ortho 2 tiles away
-        I16Vec2::new(0, 2),
-        I16Vec2::new(2, 0),
-        I16Vec2::new(0, -2),
-        I16Vec2::new(-2, 0),
-    ];
-
-    pub fn new(width: u16, heigth: u16) -> Self {
-        if width == 0 || heigth == 0 {
-            panic!("Invalid dimension - no dimension can be 0");
+    pub fn new(size: impl Into<U16Vec2>) -> Self {
+        let size = size.into();
+        if size.min_element() == 0 {
+            panic!("Invalid dimensions - no dimension can be 0");
         }
 
         Self {
-            width,
-            heigth,
+            size,
             occupied_tiles: HashMap::default(),
-            // todo: default to regular QWERTY instead, but make this configurable
-            move_chars: "zarstdhneiokjwfpgcluybvm".chars().collect::<HashSet<_>>(),
-            targetable_tiles: HashMap::with_capacity((width * heigth) as usize),
+            targetable_tiles: HashMap::with_capacity((size.element_product()) as usize),
             tile_object_coords: HashMap::default(),
             center_global_position: Vec2::ZERO,
         }
@@ -112,7 +95,7 @@ impl Grid {
     }
 
     pub fn grid_size(&self) -> U16Vec2 {
-        (self.width, self.heigth).into()
+        self.size
     }
 
     pub fn size(&self) -> Vec2 {
@@ -209,34 +192,7 @@ impl Grid {
     }
 
     pub fn within_bounds(&self, tile: Coords) -> bool {
-        tile.min_element() >= 0 && tile.x < self.width as _ && tile.y < self.heigth as _
-    }
-
-    /// Characters of tiles that could conflict when using orthogonal actions
-    pub fn ortho_conflict_chars(&self, tile: Coords) -> HashSet<char> {
-        // area spanning 2 into each direction to avoid using the same chars for opposite neighbours of a character
-        Self::DIRS_ORTHO_CONFLICT
-            .iter()
-            .flat_map(|dir| {
-                let target = tile + dir;
-                if !self.within_bounds(target) || *dir == Coords::ZERO {
-                    return Vec::new();
-                }
-                match self.occupied_tiles.get(&target) {
-                    Some(tile_obj) => match tile_obj.kind {
-                        TileObjectKind::Enemy(ref word) => word.chars.clone(),
-                        TileObjectKind::Wall(ref words) => {
-                            words.words.iter().flat_map(|w| w.chars.clone()).collect()
-                        }
-                        TileObjectKind::Player => Vec::new(),
-                    },
-                    None => self
-                        .targetable_tiles
-                        .get(&target)
-                        .map_or_else(|| Vec::new(), |tt| vec![tt.move_char]),
-                }
-            })
-            .collect()
+        tile.min_element() >= 0 && tile.x < self.size.x as _ && tile.y < self.size.y as _
     }
 
     pub fn targetable_neighbours(
@@ -274,7 +230,7 @@ impl Grid {
     }
 
     pub fn iter_tiles(&self) -> TileIterator {
-        TileIterator::from_size((self.width, self.heigth))
+        TileIterator::from_size(self.size)
     }
 
     pub fn iter_targetable_tiles(&self) -> impl Iterator<Item = (Coords, TargetableTile)> {
@@ -301,7 +257,7 @@ impl Grid {
     pub fn ascii_debug_map(&self) -> String {
         let size = self.grid_size();
         let mut dbg_map = String::with_capacity(size.element_product() as _);
-        let x_axis = (0..self.width)
+        let x_axis = (0..self.size.x)
             .map(|i| (i % 10).to_string())
             .collect::<String>();
         dbg_map.push_str(&format!(" _{}_\n", &x_axis));
@@ -319,6 +275,7 @@ impl Grid {
                     TileObjectKind::Player => '@',
                     TileObjectKind::Enemy(_) => '*',
                     TileObjectKind::Wall(_) => '#',
+                    TileObjectKind::Goal => 'G',
                 },
                 None => self
                     .targetable_tiles
@@ -375,7 +332,7 @@ mod tests {
     #[test_case(0., 0., 0., TILE_SIZE_F32 * -2. => None)]
     #[traced_test]
     fn world_to_tile(map_x: f32, map_y: f32, world_x: f32, world_y: f32) -> Option<Coords> {
-        let mut board = Grid::new(3, 3);
+        let mut board = Grid::new((3, 3));
         board.center_global_position = Vec2::new(map_x, map_y);
 
         board.world_to_tile(Vec2::new(world_x, world_y))
@@ -390,7 +347,7 @@ mod tests {
     #[test_case(0.,0., 0, 3 => None)]
     #[traced_test]
     fn tile_to_world(map_x: f32, map_y: f32, tile_x: i16, tile_y: i16) -> Option<Vec2> {
-        let mut board = Grid::new(3, 3);
+        let mut board = Grid::new((3, 3));
         board.center_global_position = Vec2::new(map_x, map_y);
 
         board.tile_to_world(Coords::new(tile_x, tile_y))
@@ -404,14 +361,14 @@ mod tests {
     #[test_case(50, 0 => matches Err(PlaceError::OutOfBounds))]
     #[test_case(0, 50 => matches Err(PlaceError::OutOfBounds))]
     fn can_place_at_coords(x: i16, y: i16) -> Result<(), PlaceError> {
-        let board = Grid::new(6, 9);
+        let board = Grid::new((6, 9));
         board.can_place_at((x, y).into())
     }
 
     #[test]
     fn cannot_place_at_coords_when_taken() {
         let coords: Coords = (3, 3).into();
-        let mut board = Grid::new(6, 6);
+        let mut board = Grid::new((6, 6));
         board
             .place_entity(
                 TileObject {
@@ -435,7 +392,7 @@ mod tests {
     #[test_case(3, (0, -1) => false)]
     #[traced_test]
     fn within_bounds(size: u16, tile: (i16, i16)) -> bool {
-        let board = Grid::new(size, size);
+        let board = Grid::new(U16Vec2::splat(size));
         board.within_bounds(tile.into())
     }
 
@@ -451,7 +408,7 @@ mod tests {
     /// 4...!.4
     /// \_01234\_
     fn test_grid() -> Grid {
-        let mut grid = Grid::new(5, 5);
+        let mut grid = Grid::new((5, 5));
         for tile in [(1, 1), (2, 1), (3, 1)] {
             _ = grid
                 .place_entity(

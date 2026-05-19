@@ -51,6 +51,7 @@ pub enum TileObjectKind {
     Player,
     Enemy(TypableWord),
     Wall(TypableWords),
+    Goal,
 }
 impl TileObjectKind {
     pub fn enemy(word: impl Into<String>) -> Self {
@@ -63,7 +64,7 @@ impl TileObjectKind {
 
     pub fn next_char(&self) -> Option<char> {
         match self {
-            Self::Player => None,
+            Self::Player | Self::Goal => None,
             Self::Enemy(word) => word.next_char(),
             Self::Wall(words) => words.next_char(),
         }

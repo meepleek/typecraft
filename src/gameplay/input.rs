@@ -3,7 +3,17 @@ use bevy::input::{ButtonState, keyboard::KeyboardInput};
 use crate::prelude::*;
 
 pub(super) fn plugin(app: &mut App) {
+    app.init_resource::<MoveChars>();
     app.add_systems(Update, handle_input);
+}
+
+#[derive(Resource, Debug, Deref, DerefMut)]
+pub struct MoveChars(HashSet<char>);
+impl Default for MoveChars {
+    fn default() -> Self {
+        // todo: default to regular QWERTY instead, but make this configurable
+        Self("zarstdhneiokjwfpgcluybvm".chars().collect::<HashSet<_>>())
+    }
 }
 
 fn handle_input(
@@ -43,7 +53,6 @@ fn handle_input(
             );
         }
         let tn = or_continue_quiet!(targetable_neighbours.first());
-        tracing::warn!(?tn);
         match &tn.object {
             Some(_to) => todo!(),
             None => {

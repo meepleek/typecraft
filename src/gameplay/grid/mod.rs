@@ -2,6 +2,7 @@ pub use crate::prelude::*;
 use bevy::math::I16Vec2;
 
 pub mod grid;
+pub mod populated;
 pub mod template;
 pub mod tile;
 

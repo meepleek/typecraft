@@ -124,3 +124,6 @@ codegen-units = 4
 
 [profile.ci.package."*"]
 opt-level = 0
+
+[dev-dependencies]
+pretty_assertions = "1.4.1"
