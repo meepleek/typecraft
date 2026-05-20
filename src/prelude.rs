@@ -31,7 +31,7 @@ pub use mplk_utils::prelude::*;
 pub use crate::gameplay::{
     grid::{
         Coords, grid, populated, template,
-        tile::{self, ObjectCoords},
+        tile::{self, GridTileCoords, ObjectCoords},
         world::{GridSize, GridWorld},
     },
     input, player,

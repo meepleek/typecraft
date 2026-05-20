@@ -175,6 +175,7 @@ impl PopulatedGrid {
                         Text2d::new(*c),
                         TextFont::from_font_size(40.),
                         TextColor(Color::WHITE.with_alpha(tile::TILE_ALPHA_HIDDEN)),
+                        GridTileCoords(*t),
                         tile::CharWiggle::new(
                             ms(rng.random_range(0..5_000)),
                             self.chess_distance_to_player(*t),
@@ -204,7 +205,7 @@ impl PopulatedGrid {
                         }
                     };
 
-                    grid.place_entity(
+                    grid.place_object(
                         tile::TileObject {
                             entity,
                             kind: kind.clone(),

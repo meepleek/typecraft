@@ -297,7 +297,7 @@ fn move_tile_object(
             grid.move_player(tile);
             (start_tile, end_tile)
         } else {
-            or_return!(grid.move_entity(player_e, tile))
+            or_return!(grid.move_object(player_e, tile))
         };
         cmd.try_insert_to(
             e,
@@ -314,30 +314,48 @@ fn move_tile_object(
     }
 }
 
-fn fade_in_tile() {
-    // const TWEEN_STEP_MS: u64 = 110;
-    // let chess_dist_to_player = self.player.chebyshev_distance(t);
-    // let manhattan_dist_to_player = self.player.manhattan_distance(tt.tile);
-    // let tween_delay = ms(chess_dist_to_player as u64 * TWEEN_STEP_MS);
+fn fade_in_tile(
+    tile_q: Query<(Entity, &GridTileCoords), Added<GridTileCoords>>,
+    grid: Option<Single<&mut grid::Grid>>,
+    mut trans_q: Query<&mut Transform>,
+    mut cmd: Commands,
+) {
+    let grid = or_return!(grid);
+    const TWEEN_STEP_MS: u64 = 110;
+    for (e, t) in &tile_q {
+        let t = t.0;
+        let tween_delay = ms(grid.chess_distance_to_player(t) as u64 * TWEEN_STEP_MS);
+        let tween_e = match grid.get_tile_object_or_player_entity(t) {
+            Some(obj_e) => {
+                // reset scale of hidden targetable char
+                let mut char_t = or_return!(trans_q.get_mut(e));
+                char_t.scale = Vec3::ONE;
+                obj_e
+            }
+            None => {
+                let alpha = if grid.manhattan_distance_to_player(t) <= 1 {
+                    tile::TILE_ALPHA_TARGETABLE
+                } else {
+                    tile::TILE_ALPHA_INACTIVE
+                };
+                cmd.spawn(
+                    TextAlphaLensSrc::new(alpha)
+                        .duration(ms(210))
+                        .delay(tween_delay + ms(80))
+                        .target(e),
+                );
+                e
+            }
+        };
 
-    // if show_char && manhattan_dist_to_player > 1 {
-    //     b.spawn(
-    //         TextAlphaLensSrc::absolute(start_alpha, tile::TILE_ALPHA_INACTIVE)
-    //             .duration(ms(210))
-    //             .delay(tween_delay + ms(150))
-    //             .target(e),
-    //     );
-    // }
-
-    // let tween_e =
-    //     tween_e_src.unwrap_or(targetable_char_e.expect("Failed to spawn targetable tile"));
-    // b.spawn(
-    //     TransformScaleLensSrc::new(Vec2::ONE)
-    //         .duration(ms(400))
-    //         .target(tween_e)
-    //         .delay(tween_delay)
-    //         .easing(EaseFunction::BackOut),
-    // );
+        cmd.spawn(
+            TransformScaleLensSrc::new(Vec2::ONE)
+                .duration(ms(550))
+                .target(tween_e)
+                .delay(tween_delay)
+                .easing(EaseFunction::BackOut),
+        );
+    }
 }
 
 fn tween_tile_char_alpha(

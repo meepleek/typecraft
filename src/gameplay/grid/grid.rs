@@ -109,7 +109,7 @@ impl Grid {
         Ok(())
     }
 
-    pub fn place_entity(
+    pub fn place_object(
         &mut self,
         tile_object: TileObject,
         coords: Coords,
@@ -121,19 +121,19 @@ impl Grid {
         Ok(())
     }
 
-    pub fn move_entity(
+    pub fn move_object(
         &mut self,
-        entity: Entity,
+        object_entity: Entity,
         coords: Coords,
     ) -> Result<(TargetableTile, TargetableTile), MoveError> {
         self.can_place_at(coords)?;
-        let Some(prev_tile) = self.tile_object_coords.get(&entity).copied() else {
+        let Some(prev_tile) = self.tile_object_coords.get(&object_entity).copied() else {
             return Err(MoveError::EntityLookupFailed);
         };
         let Some(tile_obj) = self.clear_tile(prev_tile.clone()) else {
             panic!("Reverse coords lookup failed")
         };
-        self.place_entity(tile_obj, coords)?;
+        self.place_object(tile_obj, coords)?;
         let (Some(prev_tt), Some(new_tt)) = (
             self.targetable_tiles.get(&prev_tile),
             self.targetable_tiles.get(&coords),
@@ -141,6 +141,19 @@ impl Grid {
             panic!("Targetable tile not found");
         };
         Ok((prev_tt.clone(), new_tt.clone()))
+    }
+
+    pub fn get_tile_object_or_player_entity(&self, tile: Coords) -> Option<Entity> {
+        self.occupied_tiles.get(&tile).map_or_else(
+            || {
+                if tile == self.player_tile() {
+                    Some(self.player_state.entity)
+                } else {
+                    None
+                }
+            },
+            |obj| Some(obj.entity),
+        )
     }
 
     pub fn clear_tile(&mut self, coords: Coords) -> Option<TileObject> {
@@ -276,7 +289,7 @@ mod tests {
         let coords: Coords = (3, 3).into();
         let mut board = test_grid((6, 6));
         board
-            .place_entity(
+            .place_object(
                 TileObject {
                     kind: TileObjectKind::wall(["wall"]),
                     entity: Entity::PLACEHOLDER,
