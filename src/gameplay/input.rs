@@ -56,7 +56,7 @@ fn handle_input(
         match &tn.object {
             Some(_to) => todo!(),
             None => {
-                cmd.try_insert_to(player_e, tile::TileCoords(tn.tile));
+                cmd.try_insert_to(player_e, tile::GridTileCoords(tn.tile));
             }
         }
     }

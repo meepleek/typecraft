@@ -30,8 +30,8 @@ pub use mplk_utils::prelude::*;
 
 pub use crate::gameplay::{
     grid::{
-        Coords, grid, template,
-        tile::{self, TileCoords},
+        Coords, grid, populated, template,
+        tile::{self, GridTileCoords},
     },
     input, player,
     wordlist::{self, char_mask::CharMask, word::Word, wordlist::list::WordList},

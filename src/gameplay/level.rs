@@ -1,6 +1,6 @@
 //! Spawn the main level.
 
-use crate::prelude::*;
+use crate::prelude::{input::MoveChars, *};
 use bevy::prelude::*;
 use grid::Grid;
 
@@ -29,7 +29,11 @@ pub const DEBUG_LVL: &str = "
 ";
 
 /// A system that spawns the main level.
-pub fn spawn_level(mut cmd: Commands, wordlist: Res<WordList>) -> Result {
+pub fn spawn_level(
+    mut cmd: Commands,
+    wordlist: Res<WordList>,
+    move_chars: Res<MoveChars>,
+) -> Result {
     let grid_template: template::GridChunkTemplate = DEBUG_LVL.parse()?;
     let mut e_cmd = cmd.spawn((
         Name::new("Level"),
@@ -37,8 +41,10 @@ pub fn spawn_level(mut cmd: Commands, wordlist: Res<WordList>) -> Result {
         Visibility::default(),
         DespawnOnExit(Screen::Gameplay),
     ));
-    // grid_template.spawn(&mut e_cmd, &wordlist);
-    todo!("spawn grid");
+    let mut rng = rng();
+    let populated_grid =
+        populated::PopulatedGrid::new(grid_template, &wordlist, &move_chars, &mut rng);
+    populated_grid.spawn(&mut e_cmd);
 
     Ok(())
 }
