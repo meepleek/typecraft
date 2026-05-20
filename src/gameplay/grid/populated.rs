@@ -151,7 +151,11 @@ impl PopulatedGrid {
             .collect()
     }
 
-    pub fn spawn<'a>(self, e_cmd: &'a mut EntityCommands<'a>) -> &'a mut EntityCommands<'a> {
+    pub fn spawn<'a>(
+        self,
+        e_cmd: &'a mut EntityCommands<'a>,
+        rng: &mut impl Rng,
+    ) -> &'a mut EntityCommands<'a> {
         e_cmd.with_children(|b| {
             let player_e = b
                 .spawn((player::player(), self.spawn_transform(self.player_tile)))
@@ -171,6 +175,10 @@ impl PopulatedGrid {
                         Text2d::new(*c),
                         TextFont::from_font_size(40.),
                         TextColor(Color::WHITE.with_alpha(tile::TILE_ALPHA_HIDDEN)),
+                        tile::CharWiggle::new(
+                            ms(rng.random_range(0..5_000)),
+                            self.chess_distance_to_player(*t),
+                        ),
                     ))
                     .id();
                 grid.targetable_tiles.insert(
@@ -227,6 +235,10 @@ impl GridSize for PopulatedGrid {
 
     fn tile_size(&self) -> u16 {
         self.tile_size
+    }
+
+    fn player_tile(&self) -> Coords {
+        self.player_tile
     }
 }
 

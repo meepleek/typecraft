@@ -51,7 +51,7 @@ pub fn spawn_level(
         &move_chars,
         &mut rng,
     );
-    populated_grid.spawn(&mut e_cmd);
+    populated_grid.spawn(&mut e_cmd, &mut rng);
 
     Ok(())
 }

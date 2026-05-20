@@ -90,10 +90,6 @@ impl Grid {
         &self.player_state
     }
 
-    pub fn player_tile(&self) -> Coords {
-        self.player_state.tile
-    }
-
     pub fn move_player(&mut self, tile: Coords) -> Coords {
         let prev_tile = self.player_tile();
         self.player_state.tile = tile;
@@ -246,6 +242,10 @@ impl GridSize for Grid {
 
     fn tile_size(&self) -> u16 {
         self.tile_size
+    }
+
+    fn player_tile(&self) -> Coords {
+        self.player_state.tile
     }
 }
 

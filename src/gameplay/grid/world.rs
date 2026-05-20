@@ -4,6 +4,7 @@ use bevy::math::U16Vec2;
 pub trait GridSize {
     fn grid_size(&self) -> U16Vec2;
     fn tile_size(&self) -> u16;
+    fn player_tile(&self) -> Coords;
 }
 
 pub trait GridWorld {
@@ -11,6 +12,8 @@ pub trait GridWorld {
     fn within_bounds(&self, tile: Coords) -> bool;
     fn world_to_tile(&self, pos: Vec2) -> Option<Coords>;
     fn tile_to_world(&self, tile: Coords) -> Option<Vec2>;
+    fn manhattan_distance_to_player(&self, tile: Coords) -> u16;
+    fn chess_distance_to_player(&self, tile: Coords) -> u16;
 }
 impl<G> GridWorld for G
 where
@@ -53,6 +56,14 @@ where
         let y = -tile_world.y - half_tile + half_size.y;
         Some(Vec2::new(x, y))
     }
+
+    fn manhattan_distance_to_player(&self, tile: Coords) -> u16 {
+        self.player_tile().manhattan_distance(tile)
+    }
+
+    fn chess_distance_to_player(&self, tile: Coords) -> u16 {
+        self.player_tile().chebyshev_distance(tile)
+    }
 }
 
 #[cfg(test)]
@@ -73,6 +84,10 @@ mod tests {
 
         fn tile_size(&self) -> u16 {
             TEST_TILE_SIZE
+        }
+
+        fn player_tile(&self) -> Coords {
+            Coords::ZERO
         }
     }
 

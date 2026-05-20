@@ -320,8 +320,6 @@ fn fade_in_tile() {
     // let manhattan_dist_to_player = self.player.manhattan_distance(tt.tile);
     // let tween_delay = ms(chess_dist_to_player as u64 * TWEEN_STEP_MS);
 
-    // tile::CharWiggle::new(ms(rng.random_range(0..5_000)), chess_dist_to_player);
-
     // if show_char && manhattan_dist_to_player > 1 {
     //     b.spawn(
     //         TextAlphaLensSrc::absolute(start_alpha, tile::TILE_ALPHA_INACTIVE)
