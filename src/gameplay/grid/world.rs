@@ -77,10 +77,9 @@ mod tests {
     }
 
     #[test_case(0., 0. => Some(Coords::ONE))]
-    #[test_case(0., 0. => Some(Coords::ZERO))]
-    #[test_case(TILE_SIZE_F32 * 0.4, TILE_SIZE_F32 * -0.4 => Some(Coords::ZERO))]
-    #[test_case(TILE_SIZE_F32 * 0.6, TILE_SIZE_F32 * -0.6 => Some(Coords::ONE))]
-    #[test_case(TILE_SIZE_F32, 0. => Some(Coords::new(1, 0)))]
+    #[test_case(TILE_SIZE_F32 * 0.4, TILE_SIZE_F32 * -0.4 => Some(Coords::ONE))]
+    #[test_case(TILE_SIZE_F32 * 0.6, TILE_SIZE_F32 * -0.6 => Some(Coords::new(2, 2)))]
+    #[test_case(TILE_SIZE_F32, 0. => Some(Coords::new(2, 1)))]
     #[test_case(TILE_SIZE_F32 * 1.9 , 0. => None)]
     #[test_case(TILE_SIZE_F32 * -2., 0. => None)]
     #[test_case(0., TILE_SIZE_F32 * 1.9 => None)]
@@ -92,9 +91,7 @@ mod tests {
 
     #[test_case(0, 0 => Some(Vec2::new(-TILE_SIZE_F32, TILE_SIZE_F32)))]
     #[test_case(1, 1 => Some(Vec2::new(0., 0.)))]
-    // todo: fix failing test
-    // #[test_case(0, 0 => Some(Vec2::new(TILE_SIZE_F32, -TILE_SIZE_F32)))]
-    #[test_case(2, 2 => Some(Vec2::new(TILE_SIZE_F32 * 2., TILE_SIZE_F32 * -2.)))]
+    #[test_case(2, 2 => Some(Vec2::new(TILE_SIZE_F32, -TILE_SIZE_F32)))]
     #[test_case(3, 0 => None)]
     #[test_case(0, 3 => None)]
     #[traced_test]

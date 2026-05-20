@@ -138,14 +138,11 @@ impl PopulatedGrid {
                     return Vec::new();
                 }
                 match self.occupied_tiles.get(&target) {
-                    Some(kind) => match kind {
-                        TileObjectKind::Enemy(word) => word.chars.clone(),
-                        TileObjectKind::Wall(words) => {
-                            words.words.iter().flat_map(|w| w.chars.clone()).collect()
-                        }
-                        TileObjectKind::Goal => Vec::new(),
-                    },
-                    None => self
+                    Some(TileObjectKind::Enemy(word)) => word.chars.clone(),
+                    Some(TileObjectKind::Wall(words)) => {
+                        words.words.iter().flat_map(|w| w.chars.clone()).collect()
+                    }
+                    Some(TileObjectKind::Goal) | None => self
                         .targetable_tiles
                         .get(&target)
                         .map_or_else(|| Vec::new(), |targetable_char| vec![*targetable_char]),
@@ -364,6 +361,7 @@ mod tests {
         assert_tile_hashmap_eq(
             [
                 ((3, 0), TileObjectKind::wall(["fit"])),
+                ((4, 0), TileObjectKind::Goal),
                 ((5, 0), TileObjectKind::wall(["bus"])),
                 ((3, 1), TileObjectKind::wall(["ice"])),
                 ((4, 1), TileObjectKind::wall(["egg", "leg"])),
