@@ -22,7 +22,7 @@ fn handle_input(
     mut cmd: Commands,
 ) {
     let grid = or_return_quiet!(grid);
-    let (player_tile, player_e) = or_return!(grid.get_player());
+    let player_state = grid.player_state();
     let input_chars = input_r
         .read()
         .filter_map(|ev| {
@@ -42,7 +42,7 @@ fn handle_input(
         .collect::<Vec<_>>();
     for c in input_chars {
         let targetable_neighbours = grid
-            .targetable_neighbours(player_tile, tile::TileDirection::Orthogonal)
+            .targetable_neighbours(player_state.tile, tile::TileDirection::Orthogonal)
             .filter(|tn| tn.next_char().is_some_and(|tile_c| tile_c == c))
             .collect::<Vec<_>>();
         if targetable_neighbours.len() > 1 {
@@ -56,7 +56,7 @@ fn handle_input(
         match &tn.object {
             Some(_to) => todo!(),
             None => {
-                cmd.try_insert_to(player_e, tile::GridTileCoords(tn.tile));
+                cmd.try_insert_to(player_state.entity, tile::ObjectCoords(tn.tile));
             }
         }
     }

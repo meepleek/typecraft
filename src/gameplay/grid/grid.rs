@@ -4,9 +4,8 @@ use bevy::math::U16Vec2;
 use bevy::platform::collections::HashMap;
 
 use crate::prelude::*;
+use player::PlayerGridState;
 use tile::*;
-
-pub const TILE_SIZE: u16 = 96;
 
 pub const DIRS_ORTHO: [Coords; 4] = [Coords::NEG_Y, Coords::X, Coords::Y, Coords::NEG_X];
 pub const DIRS_DIAG: [Coords; 4] = [
@@ -26,22 +25,7 @@ pub const DIRS: [Coords; 8] = [
     Coords::NEG_ONE,
 ];
 
-pub fn plugin(app: &mut App) {
-    app.add_systems(Update, track_grid_position)
-        .add_systems(Last, add_new_tile_objects_to_grid);
-}
-
-#[derive(Component)]
-#[require(Transform)]
-pub struct Grid {
-    size: U16Vec2,
-    center_global_position: Vec2,
-    occupied_tiles: HashMap<Coords, TileObject>,
-    /// Tiles which can contain TileObjects or be moved into
-    /// Coords that are not in this map are unbreakable walls
-    pub targetable_tiles: HashMap<Coords, TargetableTile>,
-    tile_object_coords: HashMap<Entity, Coords>,
-}
+pub fn plugin(_app: &mut App) {}
 
 #[derive(Debug, PartialEq, Eq, derive_more::Error, derive_more::Display)]
 pub enum AddTileError {
@@ -69,44 +53,45 @@ impl From<PlaceError> for MoveError {
     }
 }
 
+#[derive(Component)]
+#[require(Transform)]
+pub struct Grid {
+    grid_size: U16Vec2,
+    tile_size: u16,
+    player_state: PlayerGridState,
+    occupied_tiles: HashMap<Coords, TileObject>,
+    /// Tiles which can contain TileObjects or be moved into
+    /// Coords that are not in this map are unbreakable walls
+    pub targetable_tiles: HashMap<Coords, TargetableTile>,
+    tile_object_coords: HashMap<Entity, Coords>,
+}
 impl Grid {
-    pub fn new(size: impl Into<U16Vec2>) -> Self {
-        let size = size.into();
-        if size.min_element() == 0 {
+    pub fn new(
+        grid_size: impl Into<U16Vec2>,
+        tile_size: u16,
+        player_state: PlayerGridState,
+    ) -> Self {
+        let grid_size = grid_size.into();
+        if grid_size.min_element() == 0 {
             panic!("Invalid dimensions - no dimension can be 0");
         }
 
         Self {
-            size,
+            grid_size,
+            tile_size,
+            player_state,
             occupied_tiles: HashMap::default(),
-            targetable_tiles: HashMap::with_capacity((size.element_product()) as usize),
+            targetable_tiles: HashMap::with_capacity((grid_size.element_product()) as usize),
             tile_object_coords: HashMap::default(),
-            center_global_position: Vec2::ZERO,
         }
     }
 
-    #[allow(dead_code)]
-    pub fn world_center(&self) -> Vec2 {
-        self.center_global_position
+    pub fn player_state(&self) -> &PlayerGridState {
+        &self.player_state
     }
 
-    pub fn start_player_tile(&self) -> Coords {
-        (self.grid_size() / 2).as_i16vec2()
-    }
-
-    pub fn grid_size(&self) -> U16Vec2 {
-        self.size
-    }
-
-    pub fn size(&self) -> Vec2 {
-        self.grid_size().as_vec2() * TILE_SIZE as f32
-    }
-
-    pub fn get_player(&self) -> Option<(Coords, Entity)> {
-        self.occupied_tiles
-            .iter()
-            .find(|(_, obj)| obj.kind == TileObjectKind::Player)
-            .map(|(tile, to)| (*tile, to.entity))
+    pub fn player_tile(&self) -> Coords {
+        self.player_state.tile
     }
 
     pub fn get_tile_object(&self, coords: Coords) -> Option<TileObject> {
@@ -115,33 +100,6 @@ impl Grid {
 
     pub fn entity_to_coords(&self, entity: Entity) -> Option<Coords> {
         self.tile_object_coords.get(&entity).cloned()
-    }
-
-    pub fn world_to_tile(&self, pos: Vec2) -> Option<Coords> {
-        // transform world position to board space (like screen space but in tiles)
-        let half_size = self.size() / 2.;
-        let x = half_size.x - self.center_global_position.x + pos.x;
-        let y = half_size.y + self.center_global_position.y - pos.y;
-        let pos_on_board = Vec2::new(x, y);
-        let coords = (pos_on_board / TILE_SIZE as f32).floor().as_i16vec2();
-        if !self.within_bounds(coords) {
-            return None;
-        }
-
-        Some(coords)
-    }
-
-    pub fn tile_to_world(&self, tile: Coords) -> Option<Vec2> {
-        if !self.within_bounds(tile) {
-            return None;
-        }
-
-        let half_size = self.size() / 2.;
-        let half_tile = TILE_SIZE as f32 / 2.;
-        let tile_world = tile.as_vec2() * TILE_SIZE as f32;
-        let x = tile_world.x + self.center_global_position.x + half_tile - half_size.x;
-        let y = -tile_world.y + self.center_global_position.y - half_tile + half_size.y;
-        Some(Vec2::new(x, y))
     }
 
     pub fn can_place_at(&self, coords: Coords) -> Result<(), PlaceError> {
@@ -191,10 +149,6 @@ impl Grid {
         self.occupied_tiles.remove(&coords)
     }
 
-    pub fn within_bounds(&self, tile: Coords) -> bool {
-        tile.min_element() >= 0 && tile.x < self.size.x as _ && tile.y < self.size.y as _
-    }
-
     pub fn targetable_neighbours(
         &self,
         tile: Coords,
@@ -230,7 +184,7 @@ impl Grid {
     }
 
     pub fn iter_tiles(&self) -> TileIterator {
-        TileIterator::from_size(self.size)
+        TileIterator::from_size(self.grid_size)
     }
 
     pub fn iter_targetable_tiles(&self) -> impl Iterator<Item = (Coords, TargetableTile)> {
@@ -242,14 +196,9 @@ impl Grid {
         &self,
         include_player_tile: bool,
     ) -> impl Iterator<Item = (Coords, TargetableTile)> {
-        let player = if include_player_tile {
-            self.get_player()
-        } else {
-            None
-        };
+        let player_tile = self.player_tile();
         self.iter_targetable_tiles().filter(move |(t, _)| {
-            !self.occupied_tiles.contains_key(t)
-                || (include_player_tile && player.is_some_and(|(player_tile, _)| player_tile == *t))
+            !self.occupied_tiles.contains_key(t) || (include_player_tile && player_tile == *t)
         })
     }
 
@@ -257,7 +206,7 @@ impl Grid {
     pub fn ascii_debug_map(&self) -> String {
         let size = self.grid_size();
         let mut dbg_map = String::with_capacity(size.element_product() as _);
-        let x_axis = (0..self.size.x)
+        let x_axis = (0..self.grid_size.x)
             .map(|i| (i % 10).to_string())
             .collect::<String>();
         dbg_map.push_str(&format!(" _{}_\n", &x_axis));
@@ -272,11 +221,11 @@ impl Grid {
             }
             dbg_map.push(match self.occupied_tiles.get(&tile) {
                 Some(TileObject { kind, .. }) => match kind {
-                    TileObjectKind::Player => '@',
                     TileObjectKind::Enemy(_) => '*',
                     TileObjectKind::Wall(_) => '#',
                     TileObjectKind::Goal => 'G',
                 },
+                None if tile == self.player_tile() => '@',
                 None => self
                     .targetable_tiles
                     .get(&tile)
@@ -288,27 +237,13 @@ impl Grid {
     }
 }
 
-fn track_grid_position(
-    mut board_q: Query<(&mut Grid, &GlobalTransform), Changed<GlobalTransform>>,
-) {
-    for (mut board, t) in &mut board_q {
-        board.center_global_position = t.translation().truncate();
+impl GridSize for Grid {
+    fn grid_size(&self) -> U16Vec2 {
+        self.grid_size
     }
-}
 
-fn add_new_tile_objects_to_grid(
-    entity_q: Query<(Entity, &TileObjectKind, &GlobalTransform), Added<TileObjectKind>>,
-    mut grid: Single<&mut Grid>,
-) {
-    for (e, kind, t) in entity_q {
-        let tile = or_return!(grid.world_to_tile(t.translation().truncate()));
-        or_return!(grid.place_entity(
-            TileObject {
-                entity: e,
-                kind: kind.clone(),
-            },
-            tile,
-        ));
+    fn tile_size(&self) -> u16 {
+        self.tile_size
     }
 }
 
@@ -319,39 +254,8 @@ mod tests {
 
     use super::*;
 
-    const TILE_SIZE_F32: f32 = TILE_SIZE as f32;
-
-    #[test_case(0., 0., 0., 0. => Some(Coords::ONE))]
-    #[test_case(TILE_SIZE_F32, -TILE_SIZE_F32, 0., 0. => Some(Coords::ZERO))]
-    #[test_case(TILE_SIZE_F32, -TILE_SIZE_F32, TILE_SIZE_F32 * 0.4, TILE_SIZE_F32 * -0.4 => Some(Coords::ZERO))]
-    #[test_case(TILE_SIZE_F32, -TILE_SIZE_F32, TILE_SIZE_F32 * 0.6, TILE_SIZE_F32 * -0.6 => Some(Coords::ONE))]
-    #[test_case(TILE_SIZE_F32, -TILE_SIZE_F32, TILE_SIZE_F32, 0. => Some(Coords::new(1, 0)))]
-    #[test_case(0., 0., TILE_SIZE_F32 * 1.9 , 0. => None)]
-    #[test_case(0., 0., TILE_SIZE_F32 * -2., 0. => None)]
-    #[test_case(0., 0., 0., TILE_SIZE_F32 * 1.9 => None)]
-    #[test_case(0., 0., 0., TILE_SIZE_F32 * -2. => None)]
-    #[traced_test]
-    fn world_to_tile(map_x: f32, map_y: f32, world_x: f32, world_y: f32) -> Option<Coords> {
-        let mut board = Grid::new((3, 3));
-        board.center_global_position = Vec2::new(map_x, map_y);
-
-        board.world_to_tile(Vec2::new(world_x, world_y))
-    }
-
-    #[test_case(0., 0., 0, 0 => Some(Vec2::new(-TILE_SIZE_F32, TILE_SIZE_F32)))]
-    #[test_case(0., 0., 1, 1 => Some(Vec2::new(0., 0.)))]
-    // todo: fix failing test
-    // #[test_case(TILE_SIZE_F32,-TILE_SIZE_F32, 0, 0 => Some(Vec2::new(TILE_SIZE_F32, -TILE_SIZE_F32)))]
-    #[test_case(TILE_SIZE_F32,-TILE_SIZE_F32, 2, 2 => Some(Vec2::new(TILE_SIZE_F32 * 2., TILE_SIZE_F32 * -2.)))]
-    #[test_case(0.,0., 3, 0 => None)]
-    #[test_case(0.,0., 0, 3 => None)]
-    #[traced_test]
-    fn tile_to_world(map_x: f32, map_y: f32, tile_x: i16, tile_y: i16) -> Option<Vec2> {
-        let mut board = Grid::new((3, 3));
-        board.center_global_position = Vec2::new(map_x, map_y);
-
-        board.tile_to_world(Coords::new(tile_x, tile_y))
-    }
+    const TEST_TILE_SIZE: u16 = 96;
+    const TILE_SIZE_F32: f32 = TEST_TILE_SIZE as f32;
 
     #[test_case(0, 0 => matches Ok(_))]
     #[test_case(3, 3 => matches Ok(_))]
@@ -361,18 +265,18 @@ mod tests {
     #[test_case(50, 0 => matches Err(PlaceError::OutOfBounds))]
     #[test_case(0, 50 => matches Err(PlaceError::OutOfBounds))]
     fn can_place_at_coords(x: i16, y: i16) -> Result<(), PlaceError> {
-        let board = Grid::new((6, 9));
+        let board = test_grid((6, 9));
         board.can_place_at((x, y).into())
     }
 
     #[test]
     fn cannot_place_at_coords_when_taken() {
         let coords: Coords = (3, 3).into();
-        let mut board = Grid::new((6, 6));
+        let mut board = test_grid((6, 6));
         board
             .place_entity(
                 TileObject {
-                    kind: TileObjectKind::Player,
+                    kind: TileObjectKind::wall(["wall"]),
                     entity: Entity::PLACEHOLDER,
                 },
                 coords,
@@ -392,56 +296,20 @@ mod tests {
     #[test_case(3, (0, -1) => false)]
     #[traced_test]
     fn within_bounds(size: u16, tile: (i16, i16)) -> bool {
-        let board = Grid::new(U16Vec2::splat(size));
+        let board = test_grid(U16Vec2::splat(size));
         board.within_bounds(tile.into())
     }
 
     const PLAYER_TILE: (i16, i16) = (4, 2);
 
-    /// test map:
-    ///
-    /// \_01234\_
-    /// 0.!...0
-    /// 1.###.1
-    /// 2..!.@2
-    /// 3.....3
-    /// 4...!.4
-    /// \_01234\_
-    fn test_grid() -> Grid {
-        let mut grid = Grid::new((5, 5));
-        for tile in [(1, 1), (2, 1), (3, 1)] {
-            _ = grid
-                .place_entity(
-                    TileObject {
-                        entity: Entity::PLACEHOLDER,
-                        kind: TileObjectKind::wall(vec!["Wall"]),
-                    },
-                    tile.into(),
-                )
-                .expect("Failed to place an obstacle");
-        }
-        for tile in [(1, 0), (2, 2), (3, 4)] {
-            _ = grid
-                .place_entity(
-                    TileObject {
-                        entity: Entity::PLACEHOLDER,
-                        kind: TileObjectKind::enemy("smite"),
-                    },
-                    tile.into(),
-                )
-                .expect("Failed to place an enemy");
-        }
-        _ = grid
-            .place_entity(
-                TileObject {
-                    entity: Entity::PLACEHOLDER,
-                    kind: TileObjectKind::Player,
-                },
-                PLAYER_TILE.into(),
-            )
-            .expect("Failed to place the player");
-
-        println!("{}", grid.ascii_debug_map());
-        grid
+    fn test_grid(grid_size: impl Into<U16Vec2>) -> Grid {
+        Grid::new(
+            grid_size,
+            TEST_TILE_SIZE,
+            PlayerGridState {
+                tile: Coords::ZERO,
+                entity: Entity::PLACEHOLDER,
+            },
+        )
     }
 }

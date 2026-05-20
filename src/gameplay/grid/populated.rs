@@ -1,15 +1,20 @@
 use bevy::math::{I16Vec2, U16Vec2};
 
-use crate::{gameplay::wall, prelude::*};
+use crate::{
+    gameplay::wall,
+    prelude::{player::PlayerGridState, *},
+};
 use input::MoveChars;
 use template::{GridChunkTemplate, TemplateTileKind};
 use tile::TileObjectKind;
 
 #[derive(Debug, PartialEq)]
 pub struct PopulatedGrid {
+    pub player_tile: Coords,
     pub targetable_tiles: HashMap<Coords, char>,
     pub occupied_tiles: HashMap<Coords, tile::TileObjectKind>,
-    pub size: U16Vec2,
+    pub tile_size: u16,
+    pub grid_size: U16Vec2,
 }
 impl PopulatedGrid {
     const DIRS_ORTHO_CONFLICT: &[I16Vec2] = &[
@@ -26,29 +31,29 @@ impl PopulatedGrid {
     ];
 
     pub fn new(
+        tile_size: u16,
         template: GridChunkTemplate,
         wordlist: &WordList,
         move_chars: &MoveChars,
         mut rng: &mut impl Rng,
     ) -> Self {
-        let capacity = template.size.element_product() as usize;
-        let mut grid = PopulatedGrid {
+        let capacity = template.grid_size.element_product() as usize;
+        let mut populated = PopulatedGrid {
+            player_tile: template.player,
             targetable_tiles: HashMap::with_capacity(capacity),
             occupied_tiles: HashMap::with_capacity(capacity),
-            size: template.size,
+            tile_size,
+            grid_size: template.grid_size,
         };
         for tt in template.tiles {
             match tt.kind {
                 TemplateTileKind::PermaWall => {}
-                TemplateTileKind::Empty => {
-                    grid.insert_random_targetable_tile(tt.tile, move_chars, &mut rng)
+                TemplateTileKind::Player | TemplateTileKind::Empty => {
+                    populated.insert_random_targetable_tile(tt.tile, move_chars, &mut rng)
                 }
-                TemplateTileKind::Wall => grid.add_ititial_wall(tt.tile, wordlist, &mut rng),
-                TemplateTileKind::Player => {
-                    grid.add_object(tt.tile, TileObjectKind::Player, move_chars, &mut rng)
-                }
+                TemplateTileKind::Wall => populated.add_ititial_wall(tt.tile, wordlist, &mut rng),
                 TemplateTileKind::Goal => {
-                    grid.add_object(tt.tile, TileObjectKind::Goal, move_chars, &mut rng)
+                    populated.add_object(tt.tile, TileObjectKind::Goal, move_chars, &mut rng)
                 }
             };
         }
@@ -60,7 +65,7 @@ impl PopulatedGrid {
         // then add/replace words based on any available neighbour words
         // one word at a time to allow other words to also expand their mask beyond the initial word
 
-        grid
+        populated
     }
 
     fn add_object(
@@ -138,7 +143,7 @@ impl PopulatedGrid {
                         TileObjectKind::Wall(words) => {
                             words.words.iter().flat_map(|w| w.chars.clone()).collect()
                         }
-                        TileObjectKind::Player | TileObjectKind::Goal => Vec::new(),
+                        TileObjectKind::Goal => Vec::new(),
                     },
                     None => self
                         .targetable_tiles
@@ -151,39 +156,42 @@ impl PopulatedGrid {
 
     pub fn spawn<'a>(self, e_cmd: &'a mut EntityCommands<'a>) -> &'a mut EntityCommands<'a> {
         e_cmd.with_children(|b| {
-            let mut grid = grid::Grid::new(self.size);
-            for (t, c) in self.targetable_tiles {
-                let pos = grid.tile_to_world(t).expect(&format!("Invalid cords {t}"));
-                let transform_scale0 = Transform::from_translation(pos.extend(0.))
-                    .clone()
-                    .with_scale(Vec2::ZERO.extend(1.));
+            let player_e = b
+                .spawn((player::player(), self.spawn_transform(self.player_tile)))
+                .id();
+            let mut grid = grid::Grid::new(
+                self.grid_size,
+                self.tile_size,
+                PlayerGridState {
+                    tile: self.player_tile,
+                    entity: player_e,
+                },
+            );
+            for (t, c) in &self.targetable_tiles {
                 let e = b
                     .spawn((
-                        transform_scale0,
-                        Text2d::new(c),
+                        self.spawn_transform(*t),
+                        Text2d::new(*c),
                         TextFont::from_font_size(40.),
                         TextColor(Color::WHITE.with_alpha(tile::TILE_ALPHA_HIDDEN)),
                     ))
                     .id();
                 grid.targetable_tiles.insert(
-                    t,
+                    *t,
                     tile::TargetableTile {
-                        move_char: c,
+                        move_char: *c,
                         move_char_e: e,
                     },
                 );
 
-                if let Some(kind) = self.occupied_tiles.get(&t) {
+                if let Some(kind) = self.occupied_tiles.get(&*t) {
                     let entity = match kind {
-                        TileObjectKind::Player => {
-                            b.spawn((player::player(), transform_scale0.clone())).id()
-                        }
                         TileObjectKind::Enemy(_typable_word) => {
                             // todo:
                             b.spawn(()).id()
                         }
                         TileObjectKind::Wall(typable_words) => b
-                            .spawn((wall::wall(typable_words), transform_scale0.clone()))
+                            .spawn((wall::wall(typable_words), self.spawn_transform(*t)))
                             .id(),
                         TileObjectKind::Goal => {
                             // todo:
@@ -196,7 +204,7 @@ impl PopulatedGrid {
                             entity,
                             kind: kind.clone(),
                         },
-                        t,
+                        *t,
                     )
                     .expect("Failed to place tile object");
                 }
@@ -207,156 +215,24 @@ impl PopulatedGrid {
         e_cmd
     }
 
-    // pub fn spawn<'a>(
-    //     self,
-    //     e_cmd: &'a mut EntityCommands<'a>,
-    //     wordlist: &WordList,
-    // ) -> &'a mut EntityCommands<'a> {
-    //     e_cmd.with_children(|b| {
-    //         let mut rng = rand::rng();
-    //         let mut grid = grid::Grid::new(self.size.x, self.size.y);
-    //         for tt in self.tiles {
-    //             let pos = grid
-    //                 .tile_to_world(tt.tile)
-    //                 .expect(&format!("Invalid cords {}", tt.tile));
-    //             let transform = Transform::from_translation(pos.extend(0.));
-    //             let transform_scale0 = transform.clone().with_scale(Vec2::ZERO.extend(1.));
-    //             let spawn_targetable_char = match tt.kind {
-    //                 TemplateTileKind::PermaWall => None,
-    //                 TemplateTileKind::Empty => Some((None, true)),
-    //                 TemplateTileKind::Wall => {
-    //                     let neighbour_chars = grid.ortho_conflict_chars(tt.tile);
-    //                     let neighbour_mask =
-    //                         CharMask::deny(neighbour_chars.iter().collect::<String>().bytes());
-    //                     // todo: use a char from the first word as the move char of the tile
-    //                     let word = wordlist
-    //                         .iter(3..=4)
-    //                         .filter(|w| w.matches(neighbour_mask))
-    //                         .choose(&mut rng)
-    //                         .expect("Failed to find a wall word");
-    //                     let first_word_mask = word.mask();
-    //                     let mut words = wordlist
-    //                         .iter(3..=4)
-    //                         .filter(|w| *w != word && w.matches(first_word_mask))
-    //                         .choose_multiple(&mut rng, 2)
-    //                         .iter()
-    //                         .map(|w| w.text())
-    //                         .collect::<Vec<_>>();
-    //                     words.push(word.text());
-    //                     words.shuffle(&mut rng);
-    //                     tracing::warn!(?words);
+    fn spawn_transform(&self, tile: Coords) -> Transform {
+        let pos = self
+            .tile_to_world(tile)
+            .expect(&format!("Invalid cords {tile}"));
+        Transform::from_translation(pos.extend(0.))
+            .clone()
+            .with_scale(Vec2::ZERO.extend(1.))
+    }
+}
 
-    //                     let e = b
-    //                         .spawn((wall::wall(word.text()), transform_scale0.clone()))
-    //                         .id();
-    //                     grid.place_entity(
-    //                         tile::TileObject {
-    //                             entity: e,
-    //                             kind: tile::TileObjectKind::wall(words),
-    //                         },
-    //                         tt.tile,
-    //                     )
-    //                     .expect("Failed to place tile object");
+impl GridSize for PopulatedGrid {
+    fn grid_size(&self) -> U16Vec2 {
+        self.grid_size
+    }
 
-    //                     Some((Some(e), false))
-    //                 }
-    //                 TemplateTileKind::Player => {
-    //                     let e = b.spawn((player::player(), transform_scale0.clone())).id();
-    //                     grid.place_entity(
-    //                         tile::TileObject {
-    //                             entity: e,
-    //                             kind: tile::TileObjectKind::Player,
-    //                         },
-    //                         tt.tile,
-    //                     )
-    //                     .expect("Failed to place tile object");
-
-    //                     Some((Some(e), false))
-    //                 }
-    //                 TemplateTileKind::Goal => {
-    //                     // todo: goal
-    //                     Some((None, true))
-    //                 }
-    //             };
-    //             if let Some((tween_e_src, show_char)) = spawn_targetable_char {
-    //                 const TWEEN_STEP_MS: u64 = 110;
-    //                 let chess_dist_to_player = self.player.chebyshev_distance(tt.tile);
-    //                 let manhattan_dist_to_player = self.player.manhattan_distance(tt.tile);
-    //                 let tween_delay = ms(chess_dist_to_player as u64 * TWEEN_STEP_MS);
-    //                 let neighbour_chars = grid.ortho_conflict_chars(tt.tile);
-
-    //                 let mut targetable_char_e = None;
-    //                 for _ in 0..100 {
-    //                     let c = grid
-    //                         .move_chars
-    //                         .iter()
-    //                         .choose(&mut rng)
-    //                         .expect("Failed to pick random move char");
-    //                     if !neighbour_chars.contains(c) {
-    //                         let (t, start_alpha) = if show_char {
-    //                             (transform_scale0, tile::TILE_ALPHA_TARGETABLE)
-    //                         } else {
-    //                             (transform, tile::TILE_ALPHA_HIDDEN)
-    //                         };
-    //                         let e = b
-    //                             .spawn((
-    //                                 t,
-    //                                 Text2d::new(*c),
-    //                                 TextFont::from_font_size(40.),
-    //                                 TextColor(Color::WHITE.with_alpha(start_alpha)),
-    //                                 tile::CharWiggle::new(
-    //                                     ms(rng.random_range(0..5_000)),
-    //                                     chess_dist_to_player,
-    //                                 ),
-    //                             ))
-    //                             .id();
-    //                         if show_char && manhattan_dist_to_player > 1 {
-    //                             b.spawn(
-    //                                 TextAlphaLensSrc::absolute(
-    //                                     start_alpha,
-    //                                     tile::TILE_ALPHA_INACTIVE,
-    //                                 )
-    //                                 .duration(ms(210))
-    //                                 .delay(tween_delay + ms(150))
-    //                                 .target(e),
-    //                             );
-    //                         }
-
-    //                         grid.targetable_tiles.insert(
-    //                             tt.tile,
-    //                             tile::TargetableTile {
-    //                                 move_char: *c,
-    //                                 move_char_e: e,
-    //                             },
-    //                         );
-    //                         targetable_char_e = Some(e);
-    //                         break;
-    //                     }
-    //                 }
-
-    //                 let tween_e = tween_e_src
-    //                     .unwrap_or(targetable_char_e.expect("Failed to spawn targetable tile"));
-    //                 b.spawn(
-    //                     TransformScaleLensSrc::new(Vec2::ONE)
-    //                         .duration(ms(400))
-    //                         .target(tween_e)
-    //                         .delay(tween_delay)
-    //                         .easing(EaseFunction::BackOut),
-    //                 );
-    //             }
-    //         }
-
-    //         // todo: do a couple of refining wall words iterations
-    //         // grab wall tiles
-    //         // randomise their order
-    //         // then sort by number of words (lowest first)
-    //         // then add/replace words based on any available neighbour words
-    //         // one word at a time to allow other words to also expand their mask beyond the initial word
-
-    //         b.spawn((grid, Transform::default(), Visibility::default()));
-    //     });
-    //     e_cmd
-    // }
+    fn tile_size(&self) -> u16 {
+        self.tile_size
+    }
 }
 
 #[cfg(test)]
@@ -366,6 +242,8 @@ mod tests {
 
     use super::*;
     use crate::assets::wordlist::WordListSource;
+
+    const TEST_TILE_SIZE: u16 = 96;
 
     #[test]
     #[traced_test]
@@ -395,10 +273,15 @@ mod tests {
         let move_chars = MoveChars::default();
         let mut grid = empty_generated_grid();
 
-        grid.add_object(Coords::ONE, TileObjectKind::Player, &move_chars, &mut rng);
+        grid.add_object(
+            Coords::ONE,
+            TileObjectKind::wall(["wall"]),
+            &move_chars,
+            &mut rng,
+        );
 
         pretty_assertions::assert_eq!(
-            HashMap::from([(Coords::ONE, TileObjectKind::Player)]),
+            HashMap::from([(Coords::ONE, TileObjectKind::wall(["wall"]))]),
             grid.occupied_tiles
         );
         pretty_assertions::assert_eq!(HashMap::from([(Coords::ONE, 's')]), grid.targetable_tiles);
@@ -437,9 +320,15 @@ mod tests {
         });
         let move_chars = MoveChars::default();
 
-        let grid = PopulatedGrid::new(template.unwrap(), &wordlist, &move_chars, &mut rng);
+        let grid = PopulatedGrid::new(
+            TEST_TILE_SIZE,
+            template.unwrap(),
+            &wordlist,
+            &move_chars,
+            &mut rng,
+        );
 
-        pretty_assertions::assert_eq!(U16Vec2::new(6, 5), grid.size);
+        pretty_assertions::assert_eq!(U16Vec2::new(6, 5), grid.grid_size);
         assert_tile_hashmap_eq(
             [
                 ((3, 0), 'i'),
@@ -496,7 +385,8 @@ mod tests {
         });
         let move_chars = MoveChars::default();
 
-        let mut grid = PopulatedGrid::new(template, &wordlist, &move_chars, &mut rng);
+        let mut grid =
+            PopulatedGrid::new(TEST_TILE_SIZE, template, &wordlist, &move_chars, &mut rng);
 
         let conflict_chars = grid.ortho_conflict_chars(tile.into());
         conflict_chars.into_iter().collect()
@@ -517,17 +407,19 @@ mod tests {
 
     fn empty_generated_grid() -> PopulatedGrid {
         PopulatedGrid {
+            tile_size: TEST_TILE_SIZE,
+            player_tile: Coords::ZERO,
             targetable_tiles: HashMap::new(),
             occupied_tiles: HashMap::new(),
-            size: U16Vec2::splat(5),
+            grid_size: U16Vec2::splat(5),
         }
     }
 
     const TEST_LVL_6X5: &'static str = "
-###W.W
+###WGW
 ...WWW
 ......
-......
+.@....
 ......
 ";
 

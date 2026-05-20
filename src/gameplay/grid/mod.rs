@@ -5,6 +5,7 @@ pub mod grid;
 pub mod populated;
 pub mod template;
 pub mod tile;
+pub mod world;
 
 pub type Coords = I16Vec2;
 

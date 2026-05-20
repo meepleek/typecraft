@@ -13,3 +13,9 @@ pub fn player() -> impl Bundle {
 #[derive(Component, Debug, Clone, Copy, PartialEq, Eq, Default, Reflect)]
 #[reflect(Component)]
 pub struct Player;
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct PlayerGridState {
+    pub tile: Coords,
+    pub entity: Entity,
+}

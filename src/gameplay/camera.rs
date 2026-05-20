@@ -16,7 +16,7 @@ fn track_player(
     time: Res<Time>,
 ) {
     let grid = or_return_quiet!(grid);
-    let (_, player_e) = or_return!(grid.get_player());
+    let player_e = grid.player_state().entity;
     let player_t = or_return!(trans_q.get(player_e));
     // todo: bounds checking
     let cam_pos = cam_t.translation;

@@ -44,10 +44,10 @@ impl TryFrom<char> for TemplateTileKind {
 
 #[derive(Debug, PartialEq)]
 pub struct GridChunkTemplate {
-    pub size: U16Vec2,
+    pub grid_size: U16Vec2,
     pub tiles: Vec<TemplateTile>,
-    pub player: Option<Coords>,
-    pub goal: Option<Coords>,
+    pub player: Coords,
+    pub goal: Coords,
 }
 
 impl FromStr for GridChunkTemplate {
@@ -88,8 +88,14 @@ impl FromStr for GridChunkTemplate {
             }
         }
 
+        if player.is_empty() {
+            errors.push("No player".to_string());
+        }
         if player.len() > 1 {
             errors.push("Multiple players".to_string());
+        }
+        if goal.is_empty() {
+            errors.push("No goal".to_string());
         }
         if goal.len() > 1 {
             errors.push("Multiple goals".to_string());
@@ -97,10 +103,10 @@ impl FromStr for GridChunkTemplate {
 
         if errors.is_empty() {
             Ok(GridChunkTemplate {
-                size: (size + Coords::ONE).as_u16vec2(),
+                grid_size: (size + Coords::ONE).as_u16vec2(),
                 tiles,
-                player: player.pop(),
-                goal: goal.pop(),
+                player: player.pop().unwrap(),
+                goal: goal.pop().unwrap(),
             })
         } else {
             Err(errors.join("\n"))
@@ -128,7 +134,7 @@ mod tests {
 
         assert_eq!(
             Ok(GridChunkTemplate {
-                size: U16Vec2::new(6, 2),
+                grid_size: U16Vec2::new(6, 2),
                 tiles: [
                     ((0, 0), PermaWall),
                     ((1, 0), PermaWall),
@@ -149,8 +155,8 @@ mod tests {
                     kind
                 })
                 .collect(),
-                player: Some(Coords::new(1, 1)),
-                goal: Some(Coords::new(5, 1)),
+                player: Coords::new(1, 1),
+                goal: Coords::new(5, 1),
             }),
             parsed_template
         );
@@ -169,7 +175,7 @@ mod tests {
         let template = lvl.parse::<GridChunkTemplate>();
         pretty_assertions::assert_eq!(
             Ok(GridChunkTemplate {
-                size: U16Vec2::new(6, 5),
+                grid_size: U16Vec2::new(6, 5),
                 tiles: [
                     ((0, 0), TemplateTileKind::PermaWall),
                     ((1, 0), TemplateTileKind::PermaWall),
@@ -208,8 +214,8 @@ mod tests {
                     kind
                 })
                 .collect(),
-                player: Some(Coords::new(1, 3)),
-                goal: Some(Coords::new(4, 0)),
+                player: Coords::new(1, 3),
+                goal: Coords::new(4, 0),
             }),
             template,
         );
@@ -223,7 +229,7 @@ mod tests {
 
         assert_eq!(
             Ok(GridChunkTemplate {
-                size: U16Vec2::new(3, 1),
+                grid_size: U16Vec2::new(3, 1),
                 tiles: [((0, 0), Player), ((1, 0), Empty), ((2, 0), Goal),]
                     .into_iter()
                     .map(|(tile, kind)| TemplateTile {
@@ -231,34 +237,16 @@ mod tests {
                         kind
                     })
                     .collect(),
-                player: Some(Coords::new(0, 0)),
-                goal: Some(Coords::new(2, 0)),
+                player: Coords::new(0, 0),
+                goal: Coords::new(2, 0),
             }),
             parsed_template
         );
     }
 
-    #[test]
-    #[traced_test]
-    fn parse_ok_no_playr_or_goal() {
-        let lvl = ".";
-        let parsed_template = lvl.parse::<GridChunkTemplate>();
-
-        assert_eq!(
-            Ok(GridChunkTemplate {
-                size: U16Vec2::new(1, 1),
-                tiles: vec![TemplateTile {
-                    tile: Coords::ZERO,
-                    kind: Empty
-                }],
-                player: None,
-                goal: None,
-            }),
-            parsed_template
-        );
-    }
-
+    #[test_case("..G", "No player")]
     #[test_case("@@.G", "Multiple players")]
+    #[test_case("@..", "No goal")]
     #[test_case("@.GG", "Multiple goals")]
     #[test_case("@.$._.G", "Invalid char '$' at [2, 0]\nInvalid char '_' at [4, 0]")]
     #[traced_test]

@@ -52,7 +52,6 @@ pub struct TileObject {
 
 #[derive(Component, Debug, Clone, PartialEq)]
 pub enum TileObjectKind {
-    Player,
     Enemy(TypableWord),
     Wall(TypableWords),
     Goal,
@@ -68,7 +67,7 @@ impl TileObjectKind {
 
     pub fn next_char(&self) -> Option<char> {
         match self {
-            Self::Player | Self::Goal => None,
+            Self::Goal => None,
             Self::Enemy(word) => word.next_char(),
             Self::Wall(words) => words.next_char(),
         }
@@ -287,7 +286,7 @@ fn move_tile_object(
     mut cmd: Commands,
 ) {
     let mut grid = or_return_quiet!(grid);
-    let (_, player_e) = or_return!(grid.get_player());
+    let player_e = grid.player_state().entity;
     for (e, tc) in tile_q {
         let tile = tc.0;
         // also need to fade in/out the from/to move chars
