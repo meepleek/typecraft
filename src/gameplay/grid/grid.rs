@@ -94,8 +94,10 @@ impl Grid {
         self.player_state.tile
     }
 
-    pub fn get_tile_object(&self, coords: Coords) -> Option<TileObject> {
-        self.occupied_tiles.get(&coords).cloned()
+    pub fn move_player(&mut self, tile: Coords) -> Coords {
+        let prev_tile = self.player_tile();
+        self.player_state.tile = tile;
+        prev_tile
     }
 
     pub fn entity_to_coords(&self, entity: Entity) -> Option<Coords> {

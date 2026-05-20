@@ -216,9 +216,7 @@ impl PopulatedGrid {
         let pos = self
             .tile_to_world(tile)
             .expect(&format!("Invalid cords {tile}"));
-        Transform::from_translation(pos.extend(0.))
-            .clone()
-            .with_scale(Vec2::ZERO.extend(1.))
+        Transform::from_translation(pos.extend(0.)).with_scale(Vec2::ZERO.extend(1.))
     }
 }
 

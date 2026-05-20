@@ -281,19 +281,24 @@ impl TileIterator {
 }
 
 fn move_tile_object(
-    tile_q: Query<(Entity, &ObjectCoords), Changed<ObjectCoords>>,
+    tile_q: Query<(Entity, &ObjectCoords, Has<player::Player>), Changed<ObjectCoords>>,
     grid: Option<Single<&mut grid::Grid>>,
     mut cmd: Commands,
 ) {
     let mut grid = or_return_quiet!(grid);
     let player_e = grid.player_state().entity;
-    for (e, tc) in tile_q {
+    for (e, tc, is_player) in tile_q {
         let tile = tc.0;
         // also need to fade in/out the from/to move chars
-
         let world_pos = or_return!(grid.tile_to_world(tile));
-        let (start_tile, end_tile) = or_return!(grid.move_entity(player_e, tile));
-        // todo: actually the alpha should tween a different entity containing the move char...
+        let (start_tile, end_tile) = if is_player {
+            let start_tile = or_return!(grid.targetable_tiles.get(&grid.player_tile())).clone();
+            let end_tile = or_return!(grid.targetable_tiles.get(&tile)).clone();
+            grid.move_player(tile);
+            (start_tile, end_tile)
+        } else {
+            or_return!(grid.move_entity(player_e, tile))
+        };
         cmd.try_insert_to(
             e,
             TransformPositionLensSrc::new(world_pos).duration(ms(250)),
