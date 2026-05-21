@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use bevy::{color::palettes::tailwind, ecs::relationship::RelatedSpawner, math::U16Vec2};
 use mplk_utils::math::asymptotic_smoothing_with_delta_time;
 
@@ -9,13 +7,28 @@ pub(super) fn plugin(app: &mut App) {
     app.add_systems(
         Update,
         (
-            move_tile_object,
-            fade_in_tile,
-            tween_tile_char_alpha,
-            update_tile_char_wiggle_target_speed,
-            wiggle_tile_char,
+            (move_tile_object,).in_set(UpdateSystems::Grid),
+            (
+                fade_in_tile,
+                update_wall_word_sections,
+                tween_tile_char_alpha,
+                update_tile_char_wiggle_target_speed,
+                wiggle_tile_char,
+            )
+                .after(UpdateSystems::Visuals),
         ),
     );
+
+    // todo: fixme - this is here just to sort out ordering issues with some systems even when using labels
+    for sys in [
+        UpdateSystems::TickTimers,
+        UpdateSystems::RecordInput,
+        UpdateSystems::Grid,
+        UpdateSystems::Visuals,
+    ] {
+        let system = move |mut _cmd: Commands| {};
+        app.add_systems(Update, system.in_set(sys).run_if(run_once));
+    }
 }
 
 pub const TILE_ALPHA_INACTIVE: f32 = 0.15;
@@ -34,9 +47,7 @@ pub struct TargetableTile {
     pub move_char_e: Entity,
 }
 
-// use this as a single source of truth for both the movement & ability direction
-// to avoid tricky combos like ortho movement + diag attack that could lead to buggy pathfinding
-// this should also simplify the UI & mental overhead for players
+#[expect(dead_code)]
 #[derive(Component, Debug, Clone, Copy)]
 pub enum TileDirection {
     Orthogonal,
@@ -57,6 +68,7 @@ pub enum TileObjectKind {
     Goal,
 }
 impl TileObjectKind {
+    #[expect(dead_code)]
     pub fn enemy(word: impl Into<String>) -> Self {
         TileObjectKind::Enemy(TypableWord::new(word.into().chars().collect::<Vec<_>>()))
     }
@@ -95,34 +107,55 @@ impl TypableWord {
         self.completed_count == self.chars.len()
     }
 
-    pub fn active_word_text_sections(&self) -> Vec<ObjectTextSpan> {
-        let mut sections = Vec::with_capacity(3);
+    fn completed_word_text_sections() -> [ObjectTextSpan; 4] {
+        default()
+    }
+
+    pub fn active_word_text_sections(&self, trailing_nl: bool) -> [ObjectTextSpan; 4] {
+        let mut sections = Self::completed_word_text_sections();
+        // already written
         if self.completed_count > 0 {
-            sections.push(ObjectTextSpan {
+            sections[0] = ObjectTextSpan {
                 text: self.chars[..self.completed_count].iter().collect(),
                 style: ObjectTextStyle::Written,
-            });
+            };
         }
+        // caret
+        sections[1] = ObjectTextSpan {
+            text: "|".to_string(),
+            style: ObjectTextStyle::Caret,
+        };
         let completed = self.completed();
+        // active char
         if !completed {
-            sections.push(ObjectTextSpan {
-                text: format!("{}|", self.chars[self.completed_count]),
-                style: ObjectTextStyle::Active,
-            });
+            sections[2] = ObjectTextSpan {
+                text: self.chars[self.completed_count].to_string(),
+                style: ObjectTextStyle::ActiveChar,
+            };
         }
-        if completed {
-            sections.push(ObjectTextSpan {
-                text: "|".to_string(),
-                style: ObjectTextStyle::Written,
-            });
-        } else {
-            sections.push(ObjectTextSpan {
-                text: self.chars[(self.completed_count + 1)..].iter().collect(),
-                style: ObjectTextStyle::Pending,
-            });
-        }
-
+        // pending chars
+        sections[3] = ObjectTextSpan {
+            text: self.pending_text(trailing_nl),
+            style: ObjectTextStyle::PendingChars,
+        };
         sections
+    }
+
+    pub fn upcoming_word_text_sections(&self, trailing_nl: bool) -> [ObjectTextSpan; 4] {
+        let mut sections = Self::completed_word_text_sections();
+        sections[3] = ObjectTextSpan {
+            text: self.pending_text(trailing_nl),
+            style: ObjectTextStyle::UpcomingWord,
+        };
+        sections
+    }
+
+    fn pending_text(&self, trailing_nl: bool) -> String {
+        let mut text: String = self.chars[(self.completed_count + 1)..].iter().collect();
+        if trailing_nl {
+            text.push('\n');
+        }
+        text
     }
 }
 
@@ -148,44 +181,33 @@ impl TypableWords {
             .and_then(TypableWord::next_char)
     }
 
-    pub fn text_sections(&self) -> Vec<ObjectTextSpan> {
+    fn text_sections(&self) -> Vec<ObjectTextSpan> {
         self.words
             .iter()
             .enumerate()
             .flat_map(|(i, w)| {
                 // already completed word
                 if i <= self.completed_word_count {
-                    return Vec::default();
+                    return TypableWord::completed_word_text_sections();
                 }
+                let traling_nl = i < self.words.len() - 1;
                 // current word
                 if i == self.completed_word_count + 1 {
-                    w.active_word_text_sections()
+                    w.active_word_text_sections(traling_nl)
                 }
                 // upcoming word
                 else {
-                    let mut text: String = w.chars.iter().copied().collect();
-                    if i == self.completed_word_count + 2 {
-                        // follows active word
-                        text.insert(0, '\n');
-                    }
-                    if i < self.words.len() - 1 {
-                        // more upcoming words
-                        text.push('\n');
-                    }
-                    vec![ObjectTextSpan {
-                        text,
-                        style: ObjectTextStyle::Upcoming,
-                    }]
+                    w.upcoming_word_text_sections(traling_nl)
                 }
             })
             .collect()
     }
 
-    pub fn child_sections(&self) -> impl Bundle {
+    pub fn child_sections(&self, active: bool) -> impl Bundle {
         let sections = self
             .text_sections()
             .into_iter()
-            .map(|section| section.span())
+            .map(|section| section.span(active))
             .collect::<Vec<_>>();
         Children::spawn(SpawnWith(move |s: &mut RelatedSpawner<_>| {
             for section in sections {
@@ -195,29 +217,44 @@ impl TypableWords {
     }
 }
 
+#[derive(Default)]
 pub struct ObjectTextSpan {
     text: String,
     style: ObjectTextStyle,
 }
 impl ObjectTextSpan {
-    pub fn span(&self) -> impl Bundle + use<> {
-        (TextSpan::new(&self.text), TextColor(self.style.colour()))
+    pub fn span(&self, active: bool) -> impl Bundle + use<> {
+        (
+            TextSpan::new(&self.text),
+            TextColor(self.style.colour(active)),
+        )
     }
 }
 
+#[derive(Default)]
 pub enum ObjectTextStyle {
+    #[default]
+    Empty,
     Written,
-    Active,
-    Pending,
-    Upcoming,
+    ActiveChar,
+    Caret,
+    PendingChars,
+    UpcomingWord,
 }
 impl ObjectTextStyle {
-    pub fn colour(&self) -> Color {
-        match self {
-            ObjectTextStyle::Written => tailwind::GRAY_700,
-            ObjectTextStyle::Active => tailwind::GREEN_400,
-            ObjectTextStyle::Pending => tailwind::GRAY_100,
-            ObjectTextStyle::Upcoming => tailwind::GRAY_300,
+    pub fn colour(&self, active: bool) -> Color {
+        match (self, active) {
+            (ObjectTextStyle::Written, _) => tailwind::GRAY_800,
+            (ObjectTextStyle::ActiveChar | ObjectTextStyle::Caret, true) => tailwind::GREEN_400,
+            (ObjectTextStyle::PendingChars, true) => tailwind::GRAY_400,
+            (
+                ObjectTextStyle::PendingChars
+                | ObjectTextStyle::ActiveChar
+                | ObjectTextStyle::Caret,
+                false,
+            )
+            | (ObjectTextStyle::UpcomingWord, _) => tailwind::GRAY_600,
+            (ObjectTextStyle::Empty, _) => Srgba::default().with_alpha(0.),
         }
         .into()
     }
@@ -281,7 +318,7 @@ impl TileIterator {
 }
 
 fn move_tile_object(
-    tile_q: Query<(Entity, &ObjectCoords, Has<player::Player>), Changed<ObjectCoords>>,
+    tile_q: Populated<(Entity, &ObjectCoords, Has<player::Player>), Changed<ObjectCoords>>,
     grid: Option<Single<&mut grid::Grid>>,
     mut cmd: Commands,
 ) {
@@ -294,7 +331,8 @@ fn move_tile_object(
         let (start_tile, end_tile) = if is_player {
             let start_tile = or_return!(grid.targetable_tiles.get(&grid.player_tile())).clone();
             let end_tile = or_return!(grid.targetable_tiles.get(&tile)).clone();
-            grid.move_player(tile);
+            let prev = grid.move_player(tile);
+            tracing::warn!(?prev, ?tile, grid=?grid.player_tile(), "moved player");
             (start_tile, end_tile)
         } else {
             or_return!(grid.move_object(player_e, tile))
@@ -333,7 +371,7 @@ fn fade_in_tile(
                 obj_e
             }
             None => {
-                let alpha = if grid.manhattan_distance_to_player(t) <= 1 {
+                let alpha = if grid.is_player_ortho_tile(t) {
                     tile::TILE_ALPHA_TARGETABLE
                 } else {
                     tile::TILE_ALPHA_INACTIVE
@@ -359,24 +397,41 @@ fn fade_in_tile(
 }
 
 fn tween_tile_char_alpha(
-    player_q: Option<Single<&ObjectCoords, (With<player::Player>, Changed<ObjectCoords>)>>,
+    _: Populated<(), (With<player::Player>, Changed<ObjectCoords>)>,
     grid: Option<Single<&mut grid::Grid>>,
     mut cmd: Commands,
 ) {
     let grid = or_return_quiet!(grid);
-    let player_t = or_return_quiet!(player_q).0;
     for (t, tt) in grid.iter_movable_tiles(true) {
         let mut alpha = TILE_ALPHA_INACTIVE;
-        let dist_manhattan = player_t.manhattan_distance(t);
-        if t == player_t {
+        if t == grid.player_tile() {
             alpha = TILE_ALPHA_HIDDEN;
-        } else if dist_manhattan == 1 {
+        } else if grid.is_player_ortho_tile(t) {
             alpha = TILE_ALPHA_TARGETABLE;
         }
         cmd.try_insert_to(
             tt.move_char_e,
             TextAlphaLensSrc::new(alpha).duration(ms(150)),
         );
+    }
+}
+
+fn update_wall_word_sections(
+    _: Populated<(), (With<player::Player>, Changed<ObjectCoords>)>,
+    grid: Option<Single<&mut grid::Grid>>,
+    mut txt_w: Text2dWriter,
+) {
+    let grid = or_return_quiet!(grid);
+    tracing::warn!(grid=?grid.player_tile(), "update walls");
+    for (t, wall_e, words) in grid.iter_wall_tiles() {
+        let active_tile = grid.is_player_ortho_tile(t);
+        let sections = words.text_sections();
+        for (i, section) in sections.into_iter().enumerate() {
+            let i = i + 1; // include root text index
+            let col = section.style.colour(active_tile);
+            *txt_w.text(wall_e, i) = section.text;
+            *txt_w.color(wall_e, i) = col.into();
+        }
     }
 }
 
@@ -404,15 +459,14 @@ impl CharWiggle {
 }
 
 fn update_tile_char_wiggle_target_speed(
-    player: Option<Single<&ObjectCoords, (With<player::Player>, Changed<ObjectCoords>)>>,
+    _: Populated<&ObjectCoords, (With<player::Player>, Changed<ObjectCoords>)>,
     grid: Option<Single<&mut grid::Grid>>,
     mut wiggle_q: Query<&mut CharWiggle>,
 ) {
     let grid = or_return_quiet!(grid);
-    let player_t = or_return_quiet!(player).0;
     for (t, tt) in grid.iter_targetable_tiles() {
         let mut char_rotation = or_continue!(wiggle_q.get_mut(tt.move_char_e));
-        char_rotation.update_target_speed(player_t.chebyshev_distance(t));
+        char_rotation.update_target_speed(grid.chess_distance_to_player(t));
     }
 }
 

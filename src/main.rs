@@ -58,13 +58,13 @@ impl Plugin for AppPlugin {
             assets::plugin,
         ));
 
-        // Order new `AppSystems` variants by adding them here:
         app.configure_sets(
             Update,
             (
-                AppSystems::TickTimers,
-                AppSystems::RecordInput,
-                AppSystems::Update,
+                UpdateSystems::TickTimers,
+                UpdateSystems::RecordInput,
+                UpdateSystems::Grid,
+                UpdateSystems::Visuals,
             )
                 .chain(),
         );
@@ -78,17 +78,12 @@ impl Plugin for AppPlugin {
     }
 }
 
-/// High-level groupings of systems for the app in the `Update` schedule.
-/// When adding a new variant, make sure to order it in the `configure_sets`
-/// call above.
 #[derive(SystemSet, Debug, Clone, Copy, Eq, PartialEq, Hash, PartialOrd, Ord)]
-enum AppSystems {
-    /// Tick timers.
+pub enum UpdateSystems {
     TickTimers,
-    /// Record player input.
     RecordInput,
-    /// Do everything else (consider splitting this into further variants).
-    Update,
+    Grid,
+    Visuals,
 }
 
 /// Whether or not the game is paused.

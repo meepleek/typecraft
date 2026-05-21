@@ -197,7 +197,10 @@ impl PopulatedGrid {
                             b.spawn(()).id()
                         }
                         TileObjectKind::Wall(typable_words) => b
-                            .spawn((wall::wall(typable_words), self.spawn_transform(*t)))
+                            .spawn((
+                                wall::wall(typable_words, self.is_player_ortho_tile(*t)),
+                                self.spawn_transform(*t),
+                            ))
                             .id(),
                         TileObjectKind::Goal => {
                             // todo:

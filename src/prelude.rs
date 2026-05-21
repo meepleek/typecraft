@@ -28,6 +28,7 @@ pub use mplk_ext::prelude::*;
 pub use mplk_tween::prelude::*;
 pub use mplk_utils::prelude::*;
 
+pub use crate::UpdateSystems;
 pub use crate::gameplay::{
     grid::{
         Coords, grid, populated, template,

@@ -203,6 +203,11 @@ impl Grid {
             .filter_map(|t| self.targetable_tiles.get(&t).map(|tt| (t, tt.clone())))
     }
 
+    pub fn iter_object_tiles(&self) -> impl Iterator<Item = (Coords, &TileObject)> {
+        self.iter_tiles()
+            .filter_map(|t| self.occupied_tiles.get(&t).map(|to| (t, to)))
+    }
+
     pub fn iter_movable_tiles(
         &self,
         include_player_tile: bool,
@@ -210,6 +215,15 @@ impl Grid {
         let player_tile = self.player_tile();
         self.iter_targetable_tiles().filter(move |(t, _)| {
             !self.occupied_tiles.contains_key(t) || (include_player_tile && player_tile == *t)
+        })
+    }
+
+    pub fn iter_wall_tiles(&self) -> impl Iterator<Item = (Coords, Entity, &TypableWords)> {
+        self.iter_object_tiles().filter_map(move |(t, to)| {
+            let TileObjectKind::Wall(words) = &to.kind else {
+                return None;
+            };
+            Some((t, to.entity, words))
         })
     }
 
