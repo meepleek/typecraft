@@ -1,4 +1,6 @@
-use bevy::{color::palettes::tailwind, ecs::relationship::RelatedSpawner, math::U16Vec2};
+use bevy::{
+    color::palettes::tailwind, ecs::relationship::RelatedSpawner, math::U16Vec2, text::TextBounds,
+};
 use mplk_utils::math::asymptotic_smoothing_with_delta_time;
 
 use crate::prelude::*;
@@ -110,51 +112,64 @@ impl TypableWord {
         self.completed()
     }
 
-    fn completed_word_text_sections() -> [ObjectTextSpan; 4] {
+    fn empty_word_text_spans() -> [ObjectTextSpan; 4] {
         default()
     }
 
-    pub fn active_word_text_sections(&self, trailing_nl: bool) -> [ObjectTextSpan; 4] {
-        let mut sections = Self::completed_word_text_sections();
+    fn active_word_text_spans(&self, trailing_nl: bool) -> [ObjectTextSpan; 4] {
+        let mut spans = Self::empty_word_text_spans();
         // already written
         if self.completed_count > 0 {
-            sections[0] = ObjectTextSpan {
+            spans[0] = ObjectTextSpan {
                 text: self.chars[..self.completed_count].iter().collect(),
                 style: ObjectTextStyle::Written,
             };
         }
         // caret
-        sections[1] = ObjectTextSpan {
+        spans[1] = ObjectTextSpan {
             text: "|".to_string(),
             style: ObjectTextStyle::Caret,
         };
         let completed = self.completed();
         // active char
         if !completed {
-            sections[2] = ObjectTextSpan {
+            spans[2] = ObjectTextSpan {
                 text: self.chars[self.completed_count].to_string(),
                 style: ObjectTextStyle::ActiveChar,
             };
         }
         // pending chars
-        sections[3] = ObjectTextSpan {
-            text: self.pending_text(self.completed_count + 1, trailing_nl),
+        spans[3] = ObjectTextSpan {
+            text: Self::word_text(&self.chars[self.completed_count + 1..], trailing_nl),
             style: ObjectTextStyle::PendingChars,
         };
-        sections
+        spans
     }
 
-    pub fn upcoming_word_text_sections(&self, trailing_nl: bool) -> [ObjectTextSpan; 4] {
-        let mut sections = Self::completed_word_text_sections();
-        sections[3] = ObjectTextSpan {
-            text: self.pending_text(0, trailing_nl),
+    fn upcoming_word_text_spans(&self, trailing_nl: bool) -> [ObjectTextSpan; 4] {
+        let mut spans = Self::empty_word_text_spans();
+        spans[1] = ObjectTextSpan {
+            text: " ".to_string(),
+            style: ObjectTextStyle::Empty,
+        };
+        spans[3] = ObjectTextSpan {
+            text: Self::word_text(&self.chars[..], trailing_nl),
             style: ObjectTextStyle::UpcomingWord,
         };
-        sections
+        spans
     }
 
-    fn pending_text(&self, start_i: usize, trailing_nl: bool) -> String {
-        let mut text: String = self.chars[start_i..].iter().collect();
+    fn completed_word_text_spans(&self, trailing_nl: bool) -> [ObjectTextSpan; 4] {
+        let mut spans = Self::empty_word_text_spans();
+        spans[0] = ObjectTextSpan {
+            text: Self::word_text(&self.chars[..], trailing_nl),
+            style: ObjectTextStyle::Written,
+        };
+        spans
+    }
+
+    fn word_text(chars: &[char], trailing_nl: bool) -> String {
+        let mut text: String = chars.iter().collect();
         if trailing_nl {
             text.push('\n');
         }
@@ -204,18 +219,18 @@ impl TypableWords {
             .iter()
             .enumerate()
             .flat_map(|(i, w)| {
+                let trailing_nl = i < self.words.len() - 1;
                 // already completed word
                 if i < self.completed_word_count {
-                    return TypableWord::completed_word_text_sections();
+                    return w.completed_word_text_spans(trailing_nl);
                 }
-                let traling_nl = i < self.words.len() - 1;
                 // current word
                 if i == self.completed_word_count {
-                    w.active_word_text_sections(traling_nl)
+                    w.active_word_text_spans(trailing_nl)
                 }
                 // upcoming word
                 else {
-                    w.upcoming_word_text_sections(traling_nl)
+                    w.upcoming_word_text_spans(trailing_nl)
                 }
             })
             .collect()
