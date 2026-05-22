@@ -30,12 +30,14 @@ pub use mplk_utils::prelude::*;
 
 pub use crate::UpdateSystems;
 pub use crate::gameplay::{
+    self,
     grid::{
         Coords, grid, populated, template,
         tile::{self, GridTileCoords, ObjectCoords},
         world::{GridSize, GridWorld},
     },
     input, player,
+    text::Text2dWriterExt as _,
     wordlist::{self, char_mask::CharMask, word::Word, wordlist::list::WordList},
 };
 pub use crate::screens::Screen;

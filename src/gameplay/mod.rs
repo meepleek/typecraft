@@ -5,6 +5,7 @@ pub mod grid;
 pub mod input;
 pub mod level;
 pub mod player;
+pub mod text;
 pub mod wall;
 pub mod wordlist;
 

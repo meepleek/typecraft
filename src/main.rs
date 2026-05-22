@@ -9,7 +9,7 @@ mod assets;
 mod audio;
 #[cfg(feature = "dev")]
 mod dev_tools;
-mod gameplay;
+pub mod gameplay;
 mod menus;
 mod prelude;
 mod screens;

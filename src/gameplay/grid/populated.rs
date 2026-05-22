@@ -182,7 +182,7 @@ impl PopulatedGrid {
                         ),
                     ))
                     .id();
-                grid.targetable_tiles.insert(
+                grid.insert_targetable_tile(
                     *t,
                     tile::TargetableTile {
                         move_char: *c,

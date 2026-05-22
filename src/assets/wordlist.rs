@@ -2,7 +2,7 @@ use crate::prelude::*;
 use bevy_asset_loader::prelude::*;
 
 #[derive(Asset, TypePath, Debug)]
-pub(crate) struct WordListSource {
+pub struct WordListSource {
     pub min_len: usize,
     pub words: Vec<Word>,
 }

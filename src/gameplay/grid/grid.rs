@@ -62,10 +62,13 @@ pub struct Grid {
     occupied_tiles: HashMap<Coords, TileObject>,
     /// Tiles which can contain TileObjects or be moved into
     /// Coords that are not in this map are unbreakable walls
+    // todo: make this private
     pub targetable_tiles: HashMap<Coords, TargetableTile>,
     tile_object_coords: HashMap<Entity, Coords>,
 }
 impl Grid {
+    pub const TARGETABLE_TILE_FADE: Duration = Duration::from_millis(150);
+
     pub fn new(
         grid_size: impl Into<U16Vec2>,
         tile_size: u16,
@@ -119,6 +122,10 @@ impl Grid {
         self.occupied_tiles.insert(coords, tile_object);
 
         Ok(())
+    }
+
+    pub fn get_object_mut(&mut self, coords: Coords) -> Option<&mut TileObject> {
+        self.occupied_tiles.get_mut(&coords)
     }
 
     pub fn move_object(
@@ -198,6 +205,14 @@ impl Grid {
         TileIterator::from_size(self.grid_size)
     }
 
+    pub fn insert_targetable_tile(
+        &mut self,
+        tile: Coords,
+        targetable: TargetableTile,
+    ) -> Option<TargetableTile> {
+        self.targetable_tiles.insert(tile, targetable)
+    }
+
     pub fn iter_targetable_tiles(&self) -> impl Iterator<Item = (Coords, TargetableTile)> {
         self.iter_tiles()
             .filter_map(|t| self.targetable_tiles.get(&t).map(|tt| (t, tt.clone())))
@@ -225,6 +240,15 @@ impl Grid {
             };
             Some((t, to.entity, words))
         })
+    }
+
+    pub fn targetable_char_alpha(&self, tile: Coords) -> f32 {
+        if tile == self.player_tile() {
+            return TILE_ALPHA_HIDDEN;
+        } else if self.is_player_ortho_tile(tile) {
+            return TILE_ALPHA_TARGETABLE;
+        }
+        TILE_ALPHA_INACTIVE
     }
 
     #[allow(dead_code)]

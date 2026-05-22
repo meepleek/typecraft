@@ -11,7 +11,7 @@ pub(super) fn plugin(app: &mut App) {
             (
                 fade_in_tile,
                 update_wall_word_sections,
-                tween_tile_char_alpha,
+                tween_targetable_chars_alpha_on_player_move,
                 update_tile_char_wiggle_target_speed,
                 wiggle_tile_char,
             )
@@ -47,7 +47,6 @@ pub struct TargetableTile {
     pub move_char_e: Entity,
 }
 
-#[expect(dead_code)]
 #[derive(Component, Debug, Clone, Copy)]
 pub enum TileDirection {
     Orthogonal,
@@ -68,7 +67,6 @@ pub enum TileObjectKind {
     Goal,
 }
 impl TileObjectKind {
-    #[expect(dead_code)]
     pub fn enemy(word: impl Into<String>) -> Self {
         TileObjectKind::Enemy(TypableWord::new(word.into().chars().collect::<Vec<_>>()))
     }
@@ -107,6 +105,11 @@ impl TypableWord {
         self.completed_count == self.chars.len()
     }
 
+    pub fn advance(&mut self) -> bool {
+        self.completed_count += 1;
+        self.completed()
+    }
+
     fn completed_word_text_sections() -> [ObjectTextSpan; 4] {
         default()
     }
@@ -135,7 +138,7 @@ impl TypableWord {
         }
         // pending chars
         sections[3] = ObjectTextSpan {
-            text: self.pending_text(trailing_nl),
+            text: self.pending_text(self.completed_count + 1, trailing_nl),
             style: ObjectTextStyle::PendingChars,
         };
         sections
@@ -144,14 +147,14 @@ impl TypableWord {
     pub fn upcoming_word_text_sections(&self, trailing_nl: bool) -> [ObjectTextSpan; 4] {
         let mut sections = Self::completed_word_text_sections();
         sections[3] = ObjectTextSpan {
-            text: self.pending_text(trailing_nl),
+            text: self.pending_text(0, trailing_nl),
             style: ObjectTextStyle::UpcomingWord,
         };
         sections
     }
 
-    fn pending_text(&self, trailing_nl: bool) -> String {
-        let mut text: String = self.chars[(self.completed_count + 1)..].iter().collect();
+    fn pending_text(&self, start_i: usize, trailing_nl: bool) -> String {
+        let mut text: String = self.chars[start_i..].iter().collect();
         if trailing_nl {
             text.push('\n');
         }
@@ -175,24 +178,39 @@ impl TypableWords {
         }
     }
 
+    pub fn completed(&self) -> bool {
+        self.completed_word_count == self.words.len()
+    }
+
     pub fn next_char(&self) -> Option<char> {
         self.words
             .get(self.completed_word_count)
             .and_then(TypableWord::next_char)
     }
 
-    fn text_sections(&self) -> Vec<ObjectTextSpan> {
+    pub fn advance(&mut self) -> bool {
+        if let Some(w) = self.words.get_mut(self.completed_word_count)
+            && w.advance()
+        {
+            self.completed_word_count += 1;
+            return self.completed();
+        }
+
+        false
+    }
+
+    pub fn text_sections(&self) -> Vec<ObjectTextSpan> {
         self.words
             .iter()
             .enumerate()
             .flat_map(|(i, w)| {
                 // already completed word
-                if i <= self.completed_word_count {
+                if i < self.completed_word_count {
                     return TypableWord::completed_word_text_sections();
                 }
                 let traling_nl = i < self.words.len() - 1;
                 // current word
-                if i == self.completed_word_count + 1 {
+                if i == self.completed_word_count {
                     w.active_word_text_sections(traling_nl)
                 }
                 // upcoming word
@@ -219,8 +237,8 @@ impl TypableWords {
 
 #[derive(Default)]
 pub struct ObjectTextSpan {
-    text: String,
-    style: ObjectTextStyle,
+    pub text: String,
+    pub style: ObjectTextStyle,
 }
 impl ObjectTextSpan {
     pub fn span(&self, active: bool) -> impl Bundle + use<> {
@@ -244,16 +262,16 @@ pub enum ObjectTextStyle {
 impl ObjectTextStyle {
     pub fn colour(&self, active: bool) -> Color {
         match (self, active) {
-            (ObjectTextStyle::Written, _) => tailwind::GRAY_800,
+            (ObjectTextStyle::Written, _) => tailwind::GRAY_500,
             (ObjectTextStyle::ActiveChar | ObjectTextStyle::Caret, true) => tailwind::GREEN_400,
-            (ObjectTextStyle::PendingChars, true) => tailwind::GRAY_400,
+            (ObjectTextStyle::PendingChars, true) => tailwind::GRAY_200,
             (
                 ObjectTextStyle::PendingChars
                 | ObjectTextStyle::ActiveChar
                 | ObjectTextStyle::Caret,
                 false,
             )
-            | (ObjectTextStyle::UpcomingWord, _) => tailwind::GRAY_600,
+            | (ObjectTextStyle::UpcomingWord, _) => tailwind::GRAY_400,
             (ObjectTextStyle::Empty, _) => Srgba::default().with_alpha(0.),
         }
         .into()
@@ -331,8 +349,7 @@ fn move_tile_object(
         let (start_tile, end_tile) = if is_player {
             let start_tile = or_return!(grid.targetable_tiles.get(&grid.player_tile())).clone();
             let end_tile = or_return!(grid.targetable_tiles.get(&tile)).clone();
-            let prev = grid.move_player(tile);
-            tracing::warn!(?prev, ?tile, grid=?grid.player_tile(), "moved player");
+            grid.move_player(tile);
             (start_tile, end_tile)
         } else {
             or_return!(grid.move_object(player_e, tile))
@@ -396,42 +413,31 @@ fn fade_in_tile(
     }
 }
 
-fn tween_tile_char_alpha(
+fn tween_targetable_chars_alpha_on_player_move(
     _: Populated<(), (With<player::Player>, Changed<ObjectCoords>)>,
-    grid: Option<Single<&mut grid::Grid>>,
+    grid: Option<Single<&grid::Grid>>,
     mut cmd: Commands,
 ) {
     let grid = or_return_quiet!(grid);
     for (t, tt) in grid.iter_movable_tiles(true) {
-        let mut alpha = TILE_ALPHA_INACTIVE;
-        if t == grid.player_tile() {
-            alpha = TILE_ALPHA_HIDDEN;
-        } else if grid.is_player_ortho_tile(t) {
-            alpha = TILE_ALPHA_TARGETABLE;
-        }
-        cmd.try_insert_to(
-            tt.move_char_e,
-            TextAlphaLensSrc::new(alpha).duration(ms(150)),
+        cmd.spawn(
+            TextAlphaLensSrc::new(grid.targetable_char_alpha(t))
+                .duration(grid::Grid::TARGETABLE_TILE_FADE)
+                .target(tt.move_char_e),
         );
     }
 }
 
+// todo: move to wall
 fn update_wall_word_sections(
     _: Populated<(), (With<player::Player>, Changed<ObjectCoords>)>,
     grid: Option<Single<&mut grid::Grid>>,
     mut txt_w: Text2dWriter,
 ) {
     let grid = or_return_quiet!(grid);
-    tracing::warn!(grid=?grid.player_tile(), "update walls");
     for (t, wall_e, words) in grid.iter_wall_tiles() {
         let active_tile = grid.is_player_ortho_tile(t);
-        let sections = words.text_sections();
-        for (i, section) in sections.into_iter().enumerate() {
-            let i = i + 1; // include root text index
-            let col = section.style.colour(active_tile);
-            *txt_w.text(wall_e, i) = section.text;
-            *txt_w.color(wall_e, i) = col.into();
-        }
+        txt_w.update_tile_text(wall_e, words.text_sections(), active_tile);
     }
 }
 
