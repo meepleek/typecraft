@@ -63,7 +63,7 @@ pub struct Grid {
     /// Tiles which can contain TileObjects or be moved into
     /// Coords that are not in this map are unbreakable walls
     // todo: make this private
-    pub targetable_tiles: HashMap<Coords, TargetableTile>,
+    targetable_tiles: HashMap<Coords, TargetableTile>,
     tile_object_coords: HashMap<Entity, Coords>,
 }
 impl Grid {
@@ -173,6 +173,10 @@ impl Grid {
 
     pub fn clear_tile(&mut self, coords: Coords) -> Option<TileObject> {
         self.occupied_tiles.remove(&coords)
+    }
+
+    pub fn get_targetable_tile(&self, tile: Coords) -> Option<&TargetableTile> {
+        self.targetable_tiles.get(&tile)
     }
 
     pub fn targetable_neighbours(
@@ -291,38 +295,106 @@ impl Grid {
         TILE_ALPHA_INACTIVE
     }
 
-    #[allow(dead_code)]
-    pub fn ascii_debug_map(&self) -> String {
+    #[cfg(test)]
+    pub fn test_grid_from_populated(populated: populated::PopulatedGrid) -> Self {
+        let mut e_idx = 0;
+        let mut get_e = || {
+            e_idx += 1;
+            tracing::warn!(e_idx);
+            Entity::from_raw_u32(e_idx).unwrap()
+        };
+        let mut grid = Self::new(
+            populated.grid_size,
+            populated.tile_size,
+            player::PlayerGridState {
+                tile: populated.player_tile,
+                entity: get_e(),
+            },
+        );
+        grid.targetable_tiles = populated
+            .targetable_tiles
+            .into_iter()
+            .map(|(t, c)| {
+                (
+                    t,
+                    TargetableTile {
+                        move_char: c,
+                        move_char_e: get_e(),
+                    },
+                )
+            })
+            .collect();
+        for (t, kind) in populated.occupied_tiles {
+            grid.place_object(
+                TileObject {
+                    entity: get_e(),
+                    kind: kind,
+                },
+                t,
+            )
+            .expect("Failed to place test grid tile object");
+        }
+        grid
+    }
+
+    #[cfg(test)]
+    pub fn set_targetable_tiles(&mut self, targetable_tiles: HashMap<Coords, TargetableTile>) {
+        self.targetable_tiles = targetable_tiles;
+    }
+
+    #[cfg(test)]
+    pub fn ascii_debug_map(&self, show_move_chars: bool) -> String {
+        use ansi_term::Color;
+
         let size = self.grid_size();
         let mut dbg_map = String::with_capacity(size.element_product() as _);
+        let bg_col = Color::RGB(40, 40, 40);
+        let header_style = Color::RGB(170, 170, 170).on(bg_col).prefix().to_string();
         let x_axis = (0..self.grid_size.x)
             .map(|i| (i % 10).to_string())
             .collect::<String>();
-        dbg_map.push_str(&format!(" _{}_\n", &x_axis));
-        dbg_map.push_str(" 0");
+        dbg_map.push_str(&format!("{header_style} _{}_\n", &x_axis));
+        dbg_map.push_str(&format!("{header_style} 0"));
         let mut prev_y = 0;
         for tile in self.iter_tiles() {
             if tile.y != prev_y {
                 prev_y = tile.y;
-                dbg_map.push_str(&format!("{}", tile.y - 1));
+                dbg_map.push_str(&format!("{header_style}{}", tile.y - 1));
                 dbg_map.push('\n');
-                dbg_map.push_str(&format!("{:2}", tile.y));
+                dbg_map.push_str(&format!("{header_style}{:2}", tile.y));
             }
-            dbg_map.push(match self.occupied_tiles.get(&tile) {
+            let main_col = Color::RGB(255, 255, 255);
+            let (c, col) = match self.occupied_tiles.get(&tile) {
                 Some(TileObject { kind, .. }) => match kind {
-                    TileObjectKind::Enemy => '*',
-                    TileObjectKind::Wall(_) => '#',
-                    TileObjectKind::Goal => 'G',
+                    TileObjectKind::Enemy => ('*', Color::Red),
+                    TileObjectKind::Wall(_) => ('#', main_col),
+                    TileObjectKind::Goal => ('G', main_col),
                 },
-                None if tile == self.player_tile() => '@',
-                None => self
-                    .targetable_tiles
-                    .get(&tile)
-                    .map_or('■', |tt| tt.move_char),
-            });
+                None if tile == self.player_tile() => ('@', Color::Green),
+                None => self.targetable_tiles.get(&tile).map_or(
+                    ('■', Color::RGB(170, 170, 170)),
+                    |tt| {
+                        if show_move_chars {
+                            (tt.move_char, main_col)
+                        } else {
+                            ('.', main_col)
+                        }
+                    },
+                ),
+            };
+            dbg_map.push_str(&col.on(bg_col).paint(c.to_string()).to_string());
         }
-        dbg_map.push_str(&format!("{}\n _{}_", size.y - 1, &x_axis));
+        dbg_map.push_str(&format!(
+            "{header_style}{}\n{header_style} _{}_",
+            size.y - 1,
+            &x_axis
+        ));
         dbg_map
+    }
+
+    #[cfg(test)]
+    pub fn print_ascii_debug_map(&self, show_move_chars: bool) {
+        println!("{}", self.ascii_debug_map(show_move_chars));
     }
 }
 
