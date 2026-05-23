@@ -100,6 +100,10 @@ impl Grid {
     }
 
     pub fn entity_to_coords(&self, entity: Entity) -> Option<Coords> {
+        if entity == self.player_state.entity {
+            return Some(self.player_tile());
+        }
+
         self.tile_object_coords.get(&entity).cloned()
     }
 
