@@ -365,8 +365,8 @@ fn move_tile_object(
         // also need to fade in/out the from/to move chars
         let world_pos = or_return!(grid.tile_to_world(tile));
         let (start_tile, end_tile) = if is_player {
-            let start_tile = or_return!(grid.targetable_tiles.get(&grid.player_tile())).clone();
-            let end_tile = or_return!(grid.targetable_tiles.get(&tile)).clone();
+            let start_tile = or_return!(grid.get_targetable_tile(grid.player_tile())).clone();
+            let end_tile = or_return!(grid.get_targetable_tile(tile)).clone();
             grid.move_player(tile);
             (start_tile, end_tile)
         } else {

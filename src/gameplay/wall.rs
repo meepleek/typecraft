@@ -11,6 +11,8 @@ pub fn wall(words: &tile::TypableWords, active: bool) -> impl Bundle {
         Wall,
         Text2d::new(""),
         TextFont::from_font_size(30.),
+        // TextBounds::new_horizontal(96.),
+        // TextLayout::new_with_justify(Justify::Left),
         words.child_sections(active),
     )
 }
@@ -67,7 +69,7 @@ fn fade_in_targetable_word(
     mut cmd: Commands,
 ) {
     let grid = or_return!(grid);
-    let e = or_return!(grid.targetable_tiles.get(&ev.tile).map(|tt| tt.move_char_e));
+    let e = or_return!(grid.get_targetable_tile(ev.tile).map(|tt| tt.move_char_e));
     cmd.spawn(
         TextAlphaLensSrc::new(grid.targetable_char_alpha(ev.tile))
             .duration(grid::Grid::TARGETABLE_TILE_FADE)

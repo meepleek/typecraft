@@ -7,13 +7,16 @@ use bevy::{asset::AssetMetaCheck, prelude::*};
 
 mod assets;
 mod audio;
-#[cfg(feature = "dev")]
-mod dev_tools;
 pub mod gameplay;
 mod menus;
 mod prelude;
 mod screens;
 mod theme;
+
+#[cfg(feature = "dev")]
+mod dev_tools;
+#[cfg(test)]
+pub(crate) mod test_utils;
 
 fn main() -> AppExit {
     App::new().add_plugins(AppPlugin).run()
