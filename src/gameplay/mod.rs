@@ -1,6 +1,7 @@
 use bevy::prelude::*;
 
 mod camera;
+pub mod enemy;
 pub mod grid;
 pub mod input;
 pub mod level;
@@ -18,5 +19,6 @@ pub(super) fn plugin(app: &mut App) {
         camera::plugin,
         wall::plugin,
         wordlist::plugin,
+        enemy::plugin,
     ));
 }

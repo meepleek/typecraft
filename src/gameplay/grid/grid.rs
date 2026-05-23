@@ -103,10 +103,14 @@ impl Grid {
         self.tile_object_coords.get(&entity).cloned()
     }
 
-    pub fn can_place_at(&self, coords: Coords) -> Result<(), PlaceError> {
-        if !self.within_bounds(coords) {
+    pub fn is_occupied_tile(&self, tile: Coords) -> bool {
+        self.occupied_tiles.contains_key(&tile) || self.player_tile() == tile
+    }
+
+    pub fn can_place_at(&self, tile: Coords) -> Result<(), PlaceError> {
+        if !self.within_bounds(tile) {
             return Err(PlaceError::OutOfBounds);
-        } else if self.occupied_tiles.contains_key(&coords) {
+        } else if self.is_occupied_tile(tile) {
             return Err(PlaceError::Taken);
         }
         Ok(())
@@ -181,6 +185,25 @@ impl Grid {
         })
     }
 
+    pub fn unoccupied_targetable_neighbours(
+        &self,
+        tile: Coords,
+        move_dir: TileDirection,
+    ) -> impl Iterator<Item = UnoccupiedTargetableNeighbour> {
+        self.targetable_neighbours(tile, move_dir).filter_map(|tn| {
+            if tn.tile == self.player_tile() {
+                return None;
+            }
+            match tn.object {
+                Some(_) => None,
+                None => Some(UnoccupiedTargetableNeighbour {
+                    tile: tn.tile,
+                    targetable: tn.targetable,
+                }),
+            }
+        })
+    }
+
     pub fn neighbours(
         &self,
         tile: Coords,
@@ -233,13 +256,26 @@ impl Grid {
         })
     }
 
-    pub fn iter_wall_tiles(&self) -> impl Iterator<Item = (Coords, Entity, &TypableWords)> {
+    pub fn iter_destroyable_wall_tiles(
+        &self,
+    ) -> impl Iterator<Item = (Coords, Entity, &TypableWords)> {
         self.iter_object_tiles().filter_map(move |(t, to)| {
             let TileObjectKind::Wall(words) = &to.kind else {
                 return None;
             };
             Some((t, to.entity, words))
         })
+    }
+
+    pub fn is_wall_tile(&self, tile: Coords) -> bool {
+        !self.targetable_tiles.contains_key(&tile)
+            || matches!(
+                self.occupied_tiles.get(&tile),
+                Some(TileObject {
+                    kind: TileObjectKind::Wall(_),
+                    ..
+                })
+            )
     }
 
     pub fn targetable_char_alpha(&self, tile: Coords) -> f32 {
@@ -270,7 +306,7 @@ impl Grid {
             }
             dbg_map.push(match self.occupied_tiles.get(&tile) {
                 Some(TileObject { kind, .. }) => match kind {
-                    TileObjectKind::Enemy(_) => '*',
+                    TileObjectKind::Enemy => '*',
                     TileObjectKind::Wall(_) => '#',
                     TileObjectKind::Goal => 'G',
                 },
@@ -310,9 +346,9 @@ mod tests {
     const TEST_TILE_SIZE: u16 = 96;
     const TILE_SIZE_F32: f32 = TEST_TILE_SIZE as f32;
 
-    #[test_case(0, 0 => matches Ok(_))]
     #[test_case(3, 3 => matches Ok(_))]
     #[test_case(4, 6 => matches Ok(_))]
+    #[test_case(0, 0 => matches Err(PlaceError::Taken))]
     #[test_case(6, 0 => matches Err(PlaceError::OutOfBounds))]
     #[test_case(0, 9 => matches Err(PlaceError::OutOfBounds))]
     #[test_case(50, 0 => matches Err(PlaceError::OutOfBounds))]

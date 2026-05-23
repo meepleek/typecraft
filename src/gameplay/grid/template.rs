@@ -16,7 +16,7 @@ pub enum TemplateTileKind {
     Wall,
     Player,
     Goal,
-    // Enemy,
+    Enemy,
 }
 impl TemplateTileKind {
     pub const PERMAWALL: char = '#';
@@ -24,7 +24,7 @@ impl TemplateTileKind {
     pub const WALL: char = 'W';
     pub const PLAYER: char = '@';
     pub const GOAL: char = 'G';
-    // pub const ENEMY: char = '#';
+    pub const ENEMY: char = '*';
 }
 
 impl TryFrom<char> for TemplateTileKind {
@@ -37,6 +37,7 @@ impl TryFrom<char> for TemplateTileKind {
             Self::WALL => Ok(Self::Wall),
             Self::PLAYER => Ok(Self::Player),
             Self::GOAL => Ok(Self::Goal),
+            Self::ENEMY => Ok(Self::Enemy),
             _ => Err(()),
         }
     }
@@ -127,7 +128,7 @@ mod tests {
     #[traced_test]
     fn parse_ok() {
         let lvl = "
-##..WW
+##.*WW
 #@..WG
 ";
         let parsed_template = lvl.parse::<GridChunkTemplate>();
@@ -139,7 +140,7 @@ mod tests {
                     ((0, 0), PermaWall),
                     ((1, 0), PermaWall),
                     ((2, 0), Empty),
-                    ((3, 0), Empty),
+                    ((3, 0), Enemy),
                     ((4, 0), Wall),
                     ((5, 0), Wall),
                     ((0, 1), PermaWall),

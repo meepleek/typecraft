@@ -1,6 +1,4 @@
-use bevy::{
-    color::palettes::tailwind, ecs::relationship::RelatedSpawner, math::U16Vec2, text::TextBounds,
-};
+use bevy::{color::palettes::tailwind, ecs::relationship::RelatedSpawner, math::U16Vec2};
 use mplk_utils::math::asymptotic_smoothing_with_delta_time;
 
 use crate::prelude::*;
@@ -64,14 +62,14 @@ pub struct TileObject {
 
 #[derive(Component, Debug, Clone, PartialEq)]
 pub enum TileObjectKind {
-    Enemy(TypableWord),
+    Enemy,
     Wall(TypableWords),
     Goal,
 }
 impl TileObjectKind {
-    pub fn enemy(word: impl Into<String>) -> Self {
-        TileObjectKind::Enemy(TypableWord::new(word.into().chars().collect::<Vec<_>>()))
-    }
+    // pub fn enemy<TText: Into<String>>(words: impl IntoIterator<Item = TText>) -> Self {
+    //     TileObjectKind::Enemy(TypableWords::new(words))
+    // }
 
     pub fn wall<TText: Into<String>>(words: impl IntoIterator<Item = TText>) -> Self {
         TileObjectKind::Wall(TypableWords::new(words))
@@ -79,8 +77,7 @@ impl TileObjectKind {
 
     pub fn next_char(&self) -> Option<char> {
         match self {
-            Self::Goal => None,
-            Self::Enemy(word) => word.next_char(),
+            Self::Goal | Self::Enemy => None,
             Self::Wall(words) => words.next_char(),
         }
     }
@@ -294,6 +291,12 @@ impl ObjectTextStyle {
 }
 
 #[derive(Debug)]
+pub struct UnoccupiedTargetableNeighbour {
+    pub tile: Coords,
+    pub targetable: TargetableTile,
+}
+
+#[derive(Debug)]
 pub struct TargetableNeighbour {
     pub tile: Coords,
     pub targetable: TargetableTile,
@@ -356,9 +359,9 @@ fn move_tile_object(
     mut cmd: Commands,
 ) {
     let mut grid = or_return_quiet!(grid);
-    let player_e = grid.player_state().entity;
     for (e, tc, is_player) in tile_q {
         let tile = tc.0;
+        let prev_tile = or_continue!(grid.entity_to_coords(e));
         // also need to fade in/out the from/to move chars
         let world_pos = or_return!(grid.tile_to_world(tile));
         let (start_tile, end_tile) = if is_player {
@@ -367,7 +370,7 @@ fn move_tile_object(
             grid.move_player(tile);
             (start_tile, end_tile)
         } else {
-            or_return!(grid.move_object(player_e, tile))
+            or_return!(grid.move_object(e, tile))
         };
         cmd.try_insert_to(
             e,
@@ -375,11 +378,11 @@ fn move_tile_object(
         );
         cmd.try_insert_to(
             start_tile.move_char_e,
-            TextAlphaLensSrc::new(1.).duration(ms(150)),
+            TextAlphaLensSrc::new(grid.targetable_char_alpha(prev_tile)).duration(ms(150)),
         );
         cmd.try_insert_to(
             end_tile.move_char_e,
-            TextAlphaLensSrc::new(0.).duration(ms(150)),
+            TextAlphaLensSrc::new(tile::TILE_ALPHA_HIDDEN).duration(ms(150)),
         );
     }
 }
@@ -450,7 +453,7 @@ fn update_wall_word_sections(
     mut txt_w: Text2dWriter,
 ) {
     let grid = or_return_quiet!(grid);
-    for (t, wall_e, words) in grid.iter_wall_tiles() {
+    for (t, wall_e, words) in grid.iter_destroyable_wall_tiles() {
         let active_tile = grid.is_player_ortho_tile(t);
         txt_w.update_tile_text(wall_e, words.text_sections(), active_tile);
     }

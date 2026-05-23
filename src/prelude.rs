@@ -30,7 +30,7 @@ pub use mplk_utils::prelude::*;
 
 pub use crate::UpdateSystems;
 pub use crate::gameplay::{
-    self,
+    self, enemy,
     grid::{
         Coords, grid, populated, template,
         tile::{self, GridTileCoords, ObjectCoords},

@@ -51,6 +51,9 @@ impl PopulatedGrid {
                 TemplateTileKind::Player | TemplateTileKind::Empty => {
                     populated.insert_random_targetable_tile(tt.tile, move_chars, &mut rng)
                 }
+                TemplateTileKind::Enemy => {
+                    populated.add_object(tt.tile, TileObjectKind::Enemy, move_chars, &mut rng)
+                }
                 TemplateTileKind::Wall => populated.add_ititial_wall(tt.tile, wordlist, &mut rng),
                 TemplateTileKind::Goal => {
                     populated.add_object(tt.tile, TileObjectKind::Goal, move_chars, &mut rng)
@@ -138,11 +141,10 @@ impl PopulatedGrid {
                     return Vec::new();
                 }
                 match self.occupied_tiles.get(&target) {
-                    Some(TileObjectKind::Enemy(word)) => word.chars.clone(),
                     Some(TileObjectKind::Wall(words)) => {
                         words.words.iter().flat_map(|w| w.chars.clone()).collect()
                     }
-                    Some(TileObjectKind::Goal) | None => self
+                    Some(TileObjectKind::Enemy) | Some(TileObjectKind::Goal) | None => self
                         .targetable_tiles
                         .get(&target)
                         .map_or_else(|| Vec::new(), |targetable_char| vec![*targetable_char]),
@@ -192,9 +194,30 @@ impl PopulatedGrid {
 
                 if let Some(kind) = self.occupied_tiles.get(&*t) {
                     let entity = match kind {
-                        TileObjectKind::Enemy(_typable_word) => {
-                            // todo:
-                            b.spawn(()).id()
+                        TileObjectKind::Enemy => {
+                            // todo: also check for permawalls
+                            let anchor = self.occupied_tiles.iter().find_map(|(tile, kind)| {
+                                if tile.manhattan_distance(*t) == 1
+                                    && matches!(kind, TileObjectKind::Wall(_))
+                                {
+                                    Some(*tile)
+                                } else {
+                                    None
+                                }
+                            });
+                            match anchor {
+                                Some(anchor) => b
+                                    .spawn((
+                                        enemy::wall_e::wall_e(*t, anchor),
+                                        self.spawn_transform(*t),
+                                    ))
+                                    .id(),
+                                None => {
+                                    tracing::warn!(t=?*t, "Wall-E tile without a nearby anchor");
+                                    // todo: allow returning None here
+                                    b.spawn(()).id()
+                                }
+                            }
                         }
                         TileObjectKind::Wall(typable_words) => b
                             .spawn((

@@ -55,7 +55,7 @@ fn handle_input(
         let tn = or_continue_quiet!(targetable_neighbours.first());
         match &tn.object {
             Some(to) => match &to.kind {
-                tile::TileObjectKind::Enemy(_typable_word) => todo!(),
+                tile::TileObjectKind::Enemy => todo!(),
                 tile::TileObjectKind::Goal => todo!(),
                 tile::TileObjectKind::Wall(typable_words) => {
                     if typable_words.next_char().is_some_and(|wall_c| wall_c == c) {
