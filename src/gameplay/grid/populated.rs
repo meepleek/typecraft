@@ -350,7 +350,7 @@ mod tests {
         let mut rng = StdRng::seed_from_u64(42);
         let wordlist = WordList::new(&WordListSource {
             min_len: 3,
-            words: TEST_WORDS.iter().copied().map(Word::new).collect(),
+            words: TestGrid::WORDS.iter().copied().map(Word::new).collect(),
         });
         let move_chars = MoveChars::default();
 
@@ -416,7 +416,7 @@ mod tests {
         let mut rng = StdRng::seed_from_u64(42);
         let wordlist = WordList::new(&WordListSource {
             min_len: 3,
-            words: TEST_WORDS.iter().copied().map(Word::new).collect(),
+            words: TestGrid::WORDS.iter().copied().map(Word::new).collect(),
         });
         let move_chars = MoveChars::default();
 
@@ -457,15 +457,4 @@ mod tests {
 .@....
 ......
 ";
-
-    const TEST_WORDS: &[&str] = &[
-        "act", "add", "age", "ago", "aid", "aim", "air", "all", "and", "any", "app", "arm", "art",
-        "ask", "bad", "bag", "ban", "bar", "bed", "bee", "beg", "bet", "big", "bin", "bit", "box",
-        "boy", "bus", "but", "buy", "bye", "can", "cap", "car", "cat", "cow", "cry", "cup", "cut",
-        "dad", "day", "die", "dig", "dog", "dry", "due", "dvd", "ear", "eat", "egg", "end", "eye",
-        "fan", "far", "fat", "fee", "few", "fit", "fix", "flu", "fly", "for", "fry", "fun", "fur",
-        "gap", "gas", "get", "god", "gun", "guy", "gym", "hat", "her", "hey", "him", "his", "hit",
-        "hot", "how", "ice", "ill", "its", "jam", "job", "joy", "key", "kid", "lab", "law", "lay",
-        "leg", "let", "lie", "lip", "lot", "low", "mad", "man", "map",
-    ];
 }

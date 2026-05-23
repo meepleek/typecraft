@@ -43,3 +43,6 @@ pub use crate::gameplay::{
 pub use crate::screens::Screen;
 pub use crate::theme::palette::*;
 pub use crate::theme::prelude::*;
+
+#[cfg(test)]
+pub(crate) use crate::test_utils::TestGrid;

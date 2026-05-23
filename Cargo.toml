@@ -29,6 +29,10 @@ itertools = "0.14.0"
 [target.wasm32-unknown-unknown.dependencies]
 getrandom = { version = "0.3", features = ["wasm_js"] }
 
+[dev-dependencies]
+ansi_term = "0.12.1"
+pretty_assertions = "1.4.1"
+
 
 [features]
 # Default to a native dev build.
@@ -93,10 +97,6 @@ opt-level = 1
 [profile.dev.package."*"]
 opt-level = 3
 
-# Remove expensive debug assertions due to <https://github.com/bevyengine/bevy/issues/14291>
-[profile.dev.package.wgpu-types]
-debug-assertions = false
-
 [profile.release]
 # Compile the entire crate as one unit.
 # Slows compile times, marginal improvements.
@@ -124,6 +124,3 @@ codegen-units = 4
 
 [profile.ci.package."*"]
 opt-level = 0
-
-[dev-dependencies]
-pretty_assertions = "1.4.1"
