@@ -7,14 +7,20 @@ pub(super) fn plugin(app: &mut App) {
     app.add_systems(Update, wall_e_move.run_if(on_real_timer(ms(500))));
 }
 
-#[derive(Component, Debug, Clone, Copy, PartialEq, Eq, Default, Reflect)]
+#[derive(Component, Debug, Clone, Copy, PartialEq, Reflect)]
 #[reflect(Component)]
 pub struct WallE {
     anchor: Coords,
     previous_tile: Coords,
+    direction: WallieDirection,
 }
 impl WallE {
     fn step(&mut self, current_tile: Coords, grid: &grid::Grid) -> Coords {
+        fn is_deadend_anchor(grid: &grid::Grid, tile: Coords, next_tile: Coords) -> bool {
+            grid.unoccupied_targetable_neighbours(tile, tile::TileDirection::All)
+                .all(|utn| utn.tile == next_tile)
+        }
+
         let next_tile = match grid
             .unoccupied_targetable_neighbours(current_tile, tile::TileDirection::Orthogonal)
             .filter(|utn| {
@@ -22,45 +28,68 @@ impl WallE {
             })
             .next()
         {
-            Some(next_tile) => {
-                let next_tile = next_tile.tile;
-                // updating anchor
-                let dir = next_tile - current_tile;
-                // handle corner anchors
-                let turning_around_anchor = next_tile.manhattan_distance(self.anchor) == 1;
-                let maybe_corner_tile = next_tile + dir;
-                let moved_anchor_tile = self.anchor + dir;
-                if grid.is_wall_tile(maybe_corner_tile)
-                    // prevent setting a dead-end anchor
-                    && grid
-                        .unoccupied_targetable_neighbours(
-                            maybe_corner_tile,
-                            tile::TileDirection::All,
-                        )
-                        .any(|utn| utn.tile != next_tile)
-                {
-                    self.anchor = maybe_corner_tile;
-                } else if !turning_around_anchor
-                    && next_tile.manhattan_distance(moved_anchor_tile) == 1
-                    && grid.is_wall_tile(moved_anchor_tile)
-                {
-                    self.anchor = moved_anchor_tile;
-                }
-                self.previous_tile = current_tile;
-                next_tile
-            }
+            Some(next_tile) => next_tile.tile,
             None => {
                 // no matching tile => return back
-                let next_tile = self.previous_tile;
-                self.previous_tile = current_tile;
-                next_tile
+                self.previous_tile
             }
         };
+        self.previous_tile = current_tile;
+
+        // update anchor
+        // wall-hit anchor change
+        let dir = next_tile - current_tile;
+        let maybe_corner_tile = next_tile + dir;
+        if grid.is_wall_tile(maybe_corner_tile)
+            && !is_deadend_anchor(grid, maybe_corner_tile, next_tile)
+        {
+            tracing::warn!("============\nmaybe corner anchor");
+            self.anchor = maybe_corner_tile;
+            return next_tile;
+        }
+
+        // moving anchor in rotation direction
+        // let turning_around_anchor = next_tile.manhattan_distance(self.anchor) == 1;
+        let mut possible_anchor_dirs = grid::DIRS_ORTHO_CW;
+        if self.direction == WallieDirection::CounterClockwise {
+            possible_anchor_dirs.reverse();
+        }
+        let dir_i = possible_anchor_dirs
+            .iter()
+            .position(|d| *d == dir)
+            .expect("Failed to find index of anchor dir");
+        possible_anchor_dirs.rotate_left(dir_i);
+        let moved_anchor = possible_anchor_dirs
+            .into_iter()
+            .filter_map(|d| {
+                let anchor_tile = next_tile + d;
+                if !grid.is_wall_tile(anchor_tile)
+                    // skip the movement dir, 'cause that's already handled above
+                    || d == dir
+                    || next_tile.manhattan_distance(anchor_tile) != 1
+                {
+                    return None;
+                }
+                Some(anchor_tile)
+            })
+            .next();
+        if let Some(moved_anchor) = moved_anchor {
+            tracing::warn!("============\nmoved anchor tile");
+            self.anchor = moved_anchor;
+            return next_tile;
+        }
+
         next_tile
     }
 }
 
-pub fn wall_e(tile: Coords, anchor: Coords) -> impl Bundle {
+#[derive(Debug, PartialEq, Clone, Copy, Reflect)]
+pub enum WallieDirection {
+    Clockwise,
+    CounterClockwise,
+}
+
+pub fn wall_e(tile: Coords, anchor: Coords, direction: WallieDirection) -> impl Bundle {
     (
         super::Enemy,
         ObjectCoords(tile),
@@ -69,9 +98,10 @@ pub fn wall_e(tile: Coords, anchor: Coords) -> impl Bundle {
             // used as a deny list for movement
             // so using the initial position is fine
             previous_tile: tile,
+            direction,
         },
         Text2d::new(template::TemplateTileKind::ENEMY),
-        TextFont::from_font_size(50.),
+        TextFont::from_font_size(90.),
         TextColor(tailwind::RED_400.with_alpha(1.).into()),
     )
 }
@@ -110,6 +140,7 @@ mod tests {
 
     // CW direction
     #[test_case(
+        WallieDirection::Clockwise,
         WallEStepData {
           prev_tile : Coords::new(0, 1),
           tile: Coords::new(0, 0),
@@ -122,6 +153,7 @@ mod tests {
         }
     )]
     #[test_case(
+        WallieDirection::Clockwise,
         WallEStepData {
           prev_tile : Coords::new(0, 0),
           tile: Coords::new(1, 0),
@@ -134,6 +166,7 @@ mod tests {
         }
     )]
     #[test_case(
+        WallieDirection::Clockwise,
         WallEStepData {
           prev_tile : Coords::new(1, 0),
           tile: Coords::new(1, 1),
@@ -146,6 +179,7 @@ mod tests {
         }
     )]
     #[test_case(
+        WallieDirection::Clockwise,
         WallEStepData {
           prev_tile : Coords::new(1, 1),
           tile: Coords::new(2, 1),
@@ -158,6 +192,7 @@ mod tests {
         }
     )]
     #[test_case(
+        WallieDirection::Clockwise,
         WallEStepData {
           prev_tile : Coords::new(2, 1),
           tile: Coords::new(2, 2),
@@ -170,6 +205,7 @@ mod tests {
         } ; "CW: Anchor not set to dead-end tile"
     )]
     #[test_case(
+        WallieDirection::Clockwise,
         WallEStepData {
           prev_tile : Coords::new(2, 2),
           tile: Coords::new(3, 2),
@@ -182,6 +218,7 @@ mod tests {
         } ; "CW: Reset prev tile & update anchor when no next tile (dead-end)"
     )]
     #[test_case(
+        WallieDirection::Clockwise,
         WallEStepData {
           prev_tile : Coords::new(3, 2),
           tile: Coords::new(2, 2),
@@ -194,6 +231,7 @@ mod tests {
         }
     )]
     #[test_case(
+        WallieDirection::Clockwise,
         WallEStepData {
           prev_tile : Coords::new(2, 2),
           tile: Coords::new(1, 2),
@@ -206,6 +244,7 @@ mod tests {
         }
     )]
     #[test_case(
+        WallieDirection::Clockwise,
         WallEStepData {
           prev_tile : Coords::new(1, 2),
           tile: Coords::new(0, 2),
@@ -218,6 +257,7 @@ mod tests {
         }
     )]
     #[test_case(
+        WallieDirection::Clockwise,
         WallEStepData {
           prev_tile : Coords::new(0, 2),
           tile: Coords::new(0, 1),
@@ -231,6 +271,7 @@ mod tests {
     )]
     // CCW direction
     #[test_case(
+        WallieDirection::CounterClockwise,
         WallEStepData {
           prev_tile : Coords::new(1, 0),
           tile: Coords::new(0, 0),
@@ -243,6 +284,7 @@ mod tests {
         }
     )]
     #[test_case(
+        WallieDirection::CounterClockwise,
         WallEStepData {
           prev_tile : Coords::new(0, 0),
           tile: Coords::new(0, 1),
@@ -255,6 +297,7 @@ mod tests {
         }
     )]
     #[test_case(
+        WallieDirection::CounterClockwise,
         WallEStepData {
           prev_tile : Coords::new(0, 1),
           tile: Coords::new(0, 2),
@@ -267,6 +310,7 @@ mod tests {
         }
     )]
     #[test_case(
+        WallieDirection::CounterClockwise,
         WallEStepData {
           prev_tile : Coords::new(0, 2),
           tile: Coords::new(1, 2),
@@ -279,6 +323,7 @@ mod tests {
         }
     )]
     #[test_case(
+        WallieDirection::CounterClockwise,
         WallEStepData {
           prev_tile : Coords::new(1, 2),
           tile: Coords::new(2, 2),
@@ -291,6 +336,7 @@ mod tests {
         } ; "CCW: Anchor not set to dead-end tile"
     )]
     #[test_case(
+        WallieDirection::CounterClockwise,
         WallEStepData {
           prev_tile : Coords::new(2, 2),
           tile: Coords::new(3, 2),
@@ -303,6 +349,7 @@ mod tests {
         } ; "CCW: Reset prev tile & update anchor when no next tile (dead-end)"
     )]
     #[test_case(
+        WallieDirection::CounterClockwise,
         WallEStepData {
           prev_tile : Coords::new(3, 2),
           tile: Coords::new(2, 2),
@@ -315,6 +362,7 @@ mod tests {
         }
     )]
     #[test_case(
+        WallieDirection::CounterClockwise,
         WallEStepData {
           prev_tile : Coords::new(2, 2),
           tile: Coords::new(2, 1),
@@ -327,6 +375,7 @@ mod tests {
         }
     )]
     #[test_case(
+        WallieDirection::CounterClockwise,
         WallEStepData {
           prev_tile : Coords::new(2, 1),
           tile: Coords::new(1, 1),
@@ -339,6 +388,7 @@ mod tests {
         }
     )]
     #[test_case(
+        WallieDirection::CounterClockwise,
         WallEStepData {
           prev_tile : Coords::new(1, 1),
           tile: Coords::new(1, 0),
@@ -351,7 +401,7 @@ mod tests {
         }
     )]
     #[traced_test]
-    fn step(initial_state: WallEStepData, expected: WallEStepData) {
+    fn step(direction: WallieDirection, initial_state: WallEStepData, expected: WallEStepData) {
         let mut grid = TestGrid::from_str(TEST_LVL);
         grid.place_object(
             tile::TileObject {
@@ -362,6 +412,7 @@ mod tests {
         )
         .expect("Failed to place enemy");
         let mut walle = WallE {
+            direction,
             anchor: initial_state.anchor.into(),
             previous_tile: initial_state.prev_tile.into(),
         };
