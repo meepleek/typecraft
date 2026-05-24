@@ -7,14 +7,14 @@ use crate::prelude::*;
 use player::PlayerGridState;
 use tile::*;
 
-pub const DIRS_ORTHO: [Coords; 4] = [Coords::NEG_Y, Coords::X, Coords::Y, Coords::NEG_X];
-pub const DIRS_DIAG: [Coords; 4] = [
+pub const DIRS_ORTHO_CW: [Coords; 4] = [Coords::NEG_Y, Coords::X, Coords::Y, Coords::NEG_X];
+pub const DIRS_DIAG_CW: [Coords; 4] = [
     Coords::ONE,
     Coords::new(1, -1),
     Coords::NEG_ONE,
     Coords::new(-1, 1),
 ];
-pub const DIRS: [Coords; 8] = [
+pub const DIRS_CW: [Coords; 8] = [
     Coords::NEG_Y,
     Coords::new(1, -1),
     Coords::X,
@@ -226,9 +226,9 @@ impl Grid {
 
     fn neighbour_dirs(move_dir: TileDirection) -> &'static [Coords] {
         match move_dir {
-            TileDirection::Orthogonal => &DIRS_ORTHO,
-            TileDirection::Diagonal => &DIRS_DIAG,
-            TileDirection::All => &DIRS,
+            TileDirection::Orthogonal => &DIRS_ORTHO_CW,
+            TileDirection::Diagonal => &DIRS_DIAG_CW,
+            TileDirection::All => &DIRS_CW,
         }
     }
 
