@@ -63,7 +63,7 @@ impl Wallie {
             }
             (0, None, Some(backtracking_dir)) => {
                 let next_tile = current_tile + backtracking_dir;
-                tracing::warn!(?neighbours, "backtracking\n");
+                // tracing::warn!(?neighbours, "backtracking\n");
                 next_tile
             }
             (_, Some(next_tile), _) => {
@@ -103,7 +103,7 @@ impl Wallie {
             .position(|d| *d == dir_to_check)
             .expect("Failed to find index of anchor dir");
         possible_anchor_dirs.rotate_left(dir_i);
-        tracing::warn!(?possible_anchor_dirs);
+        // tracing::warn!(?possible_anchor_dirs);
         let moved_anchor = possible_anchor_dirs
             .into_iter()
             .filter_map(|d| {
@@ -124,7 +124,7 @@ impl Wallie {
             })
             .next();
         if let Some(moved_anchor) = moved_anchor {
-            tracing::warn!(leaving=?self.backtracking_dir, "============\nmoved anchor tile");
+            // tracing::warn!(leaving=?self.backtracking_dir, "============\nmoved anchor tile");
             self.anchor = moved_anchor;
             return next_tile;
         }
@@ -157,11 +157,11 @@ mod tests {
     use super::*;
 
     const TEST_LVL: &'static str = "
-..WW
-...W
-....
-####
-@G##
+    .WWW
+    ..WW
+    ....
+    ####
+    @G##
 ";
 
     #[derive(Debug, PartialEq)]
@@ -183,38 +183,38 @@ mod tests {
         },
         WallEStepData {
           prev_tile : Coords::new(0, 0),
-          tile: Coords::new(1, 0),
+          tile: Coords::new(0, 1),
           anchor: Coords::new(2, 0),
-          backtracking_dir: None
-        }
+          backtracking_dir: Some(Coords::new(0, 1))
+        } ; "CW - up-left deadend"
     )]
     #[test_case(
         RotationDirection::Clockwise,
         WallEStepData {
           prev_tile : Coords::new(0, 0),
-          tile: Coords::new(1, 0),
+          tile: Coords::new(0, 1),
           anchor: Coords::new(2, 0),
-          backtracking_dir: None
+          backtracking_dir: Some(Coords::new(0, 1))
         },
         WallEStepData {
-          prev_tile : Coords::new(1, 0),
+          prev_tile : Coords::new(0, 1),
           tile: Coords::new(1, 1),
-          anchor: Coords::new(2, 0),
+          anchor: Coords::new(2, 1),
           backtracking_dir: None
         }
     )]
     #[test_case(
         RotationDirection::Clockwise,
         WallEStepData {
-          prev_tile : Coords::new(1, 0),
+          prev_tile : Coords::new(0, 1),
           tile: Coords::new(1, 1),
-          anchor: Coords::new(2, 0),
+          anchor: Coords::new(2, 1),
           backtracking_dir: None
         },
         WallEStepData {
           prev_tile : Coords::new(1, 1),
-          tile: Coords::new(2, 1),
-          anchor: Coords::new(3, 1),
+          tile: Coords::new(1, 2),
+          anchor: Coords::new(1, 3),
           backtracking_dir: None
         }
     )]
@@ -222,12 +222,12 @@ mod tests {
         RotationDirection::Clockwise,
         WallEStepData {
           prev_tile : Coords::new(1, 1),
-          tile: Coords::new(2, 1),
-          anchor: Coords::new(3, 1),
+          tile: Coords::new(1, 2),
+          anchor: Coords::new(1, 3),
           backtracking_dir: None
         },
         WallEStepData {
-          prev_tile : Coords::new(2, 1),
+          prev_tile : Coords::new(1, 2),
           tile: Coords::new(2, 2),
           anchor: Coords::new(2, 3),
           backtracking_dir: None
@@ -236,7 +236,7 @@ mod tests {
     #[test_case(
         RotationDirection::Clockwise,
         WallEStepData {
-          prev_tile : Coords::new(2, 1),
+          prev_tile : Coords::new(1, 2),
           tile: Coords::new(2, 2),
           anchor: Coords::new(2, 3),
           backtracking_dir: None
@@ -246,7 +246,7 @@ mod tests {
           tile: Coords::new(3, 2),
           anchor: Coords::new(3, 3),
           backtracking_dir: None
-        } ; "CW: entering dead-end"
+        } ; "CW: btm-right dead-end"
     )]
     #[test_case(
         RotationDirection::Clockwise,
@@ -261,7 +261,7 @@ mod tests {
           tile: Coords::new(2, 2),
           anchor: Coords::new(2, 3),
           backtracking_dir: Some(TileDir::new(-1, 0))
-        } ; "CW: leaving dead-end"
+        } ; "CW: leaving btm-right dead-end"
     )]
     #[test_case(
         RotationDirection::Clockwise,
@@ -276,7 +276,7 @@ mod tests {
           tile: Coords::new(1, 2),
           anchor: Coords::new(1, 3),
           backtracking_dir: None
-        } ; "CW: left dead-end"
+        } ; "CW: left btm-right dead-end"
     )]
     #[test_case(
         RotationDirection::Clockwise,
@@ -319,7 +319,7 @@ mod tests {
         WallEStepData {
           prev_tile : Coords::new(0, 1),
           tile: Coords::new(0, 0),
-          anchor: Coords::new(0, -1),
+          anchor: Coords::new(1, 0),
           backtracking_dir: None
         }
     )]
@@ -397,65 +397,65 @@ mod tests {
           tile: Coords::new(3, 2),
           anchor: Coords::new(3, 1),
           backtracking_dir: None
-        } ; "CCW: entering dead-end"
+        } ; "CCW: btm-right dead-end"
     )]
     #[test_case(
         RotationDirection::CounterClockwise,
         WallEStepData {
           prev_tile : Coords::new(2, 2),
           tile: Coords::new(3, 2),
-          anchor: Coords::new(1, 3),
+          anchor: Coords::new(3, 1),
           backtracking_dir: None
         },
         WallEStepData {
           prev_tile : Coords::new(3, 2),
           tile: Coords::new(2, 2),
-          anchor: Coords::new(3, 1),
+          anchor: Coords::new(2, 1),
           backtracking_dir: Some(TileDir::new(-1, 0))
-        } ; "CCW: leaving dead-end"
+        } ; "CCW: leaving btm-right dead-end"
     )]
     #[test_case(
         RotationDirection::CounterClockwise,
         WallEStepData {
           prev_tile : Coords::new(3, 2),
           tile: Coords::new(2, 2),
-          anchor: Coords::new(3, 1),
+          anchor: Coords::new(2, 1),
           backtracking_dir: Some(TileDir::new(-1, 0))
         },
         WallEStepData {
           prev_tile : Coords::new(2, 2),
-          tile: Coords::new(2, 1),
-          anchor: Coords::new(2, 0),
+          tile: Coords::new(1, 2),
+          anchor: Coords::new(2, 1),
           backtracking_dir: None
-        } ; "CCW: left dead-end"
+        } ; "CCW: left btm-right dead-end"
     )]
     #[test_case(
         RotationDirection::CounterClockwise,
         WallEStepData {
           prev_tile : Coords::new(2, 2),
-          tile: Coords::new(2, 1),
-          anchor: Coords::new(2, 0),
+          tile: Coords::new(1, 2),
+          anchor: Coords::new(2, 1),
           backtracking_dir: None
         },
         WallEStepData {
-          prev_tile : Coords::new(2, 1),
+          prev_tile : Coords::new(1, 2),
           tile: Coords::new(1, 1),
-          anchor: Coords::new(2, 0),
+          anchor: Coords::new(1, 0),
           backtracking_dir: None
         }
     )]
     #[test_case(
         RotationDirection::CounterClockwise,
         WallEStepData {
-          prev_tile : Coords::new(2, 1),
+          prev_tile : Coords::new(1, 2),
           tile: Coords::new(1, 1),
-          anchor: Coords::new(2, 0),
+          anchor: Coords::new(1, 0),
           backtracking_dir: None
         },
         WallEStepData {
           prev_tile : Coords::new(1, 1),
-          tile: Coords::new(1, 0),
-          anchor: Coords::new(1, -1),
+          tile: Coords::new(0, 1),
+          anchor: Coords::new(1, 0),
           backtracking_dir: None
         }
     )]
@@ -463,12 +463,12 @@ mod tests {
         RotationDirection::CounterClockwise,
         WallEStepData {
           prev_tile : Coords::new(1, 1),
-          tile: Coords::new(1, 0),
-          anchor: Coords::new(1, -1),
+          tile: Coords::new(0, 1),
+          anchor: Coords::new(1, 0),
           backtracking_dir: None
         },
         WallEStepData {
-          prev_tile : Coords::new(1, 0),
+          prev_tile : Coords::new(0, 1),
           tile: Coords::new(0, 0),
           anchor: Coords::new(-1, 0),
           backtracking_dir: None
@@ -491,7 +491,7 @@ mod tests {
             prev_tile: initial_state.prev_tile,
             backtracking_dir: initial_state.backtracking_dir,
         };
-        tracing::warn!(?wallie);
+        // tracing::warn!(?wallie);
         grid.print_ascii_debug_map(false);
 
         let next_tile = wallie.step(initial_state.tile.into(), &grid);
