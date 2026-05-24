@@ -353,13 +353,13 @@ impl Grid {
         let x_axis = (0..self.grid_size.x)
             .map(|i| (i % 10).to_string())
             .collect::<String>();
-        dbg_map.push_str(&format!("{header_style} _{}_\n", &x_axis));
+        dbg_map.push_str(&format!("{header_style} _{}_ \n", &x_axis));
         dbg_map.push_str(&format!("{header_style} 0"));
         let mut prev_y = 0;
         for tile in self.iter_tiles() {
             if tile.y != prev_y {
                 prev_y = tile.y;
-                dbg_map.push_str(&format!("{header_style}{}", tile.y - 1));
+                dbg_map.push_str(&format!("{header_style}{} ", tile.y - 1));
                 dbg_map.push('\n');
                 dbg_map.push_str(&format!("{header_style}{:2}", tile.y));
             }
@@ -385,7 +385,7 @@ impl Grid {
             dbg_map.push_str(&col.on(bg_col).paint(c.to_string()).to_string());
         }
         dbg_map.push_str(&format!(
-            "{header_style}{}\n{header_style} _{}_",
+            "{header_style}{} \n{header_style} _{}_ ",
             size.y - 1,
             &x_axis
         ));
