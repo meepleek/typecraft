@@ -212,10 +212,10 @@ impl PopulatedGrid {
                                 b.spawn((
                                     // todo: proper anchor, prev & direction
                                     // possibly pass in a tile + grid instead so it's easier to test
-                                    enemy::wallie::wallie(
+                                    enemy::wallie::Wallie::bundle(
                                         *t,
                                         anchor,
-                                        enemy::wallie::WallieDirection::CounterClockwise,
+                                        enemy::wallie::RotationDirection::CounterClockwise,
                                     ),
                                     self.spawn_transform(*t),
                                 ))

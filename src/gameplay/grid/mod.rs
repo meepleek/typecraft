@@ -8,6 +8,7 @@ pub mod tile;
 pub mod world;
 
 pub type Coords = I16Vec2;
+pub type TileDir = I16Vec2;
 
 pub(super) fn plugin(app: &mut App) {
     app.add_plugins((grid::plugin, tile::plugin));
