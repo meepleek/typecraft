@@ -45,4 +45,4 @@ pub use crate::theme::palette::*;
 pub use crate::theme::prelude::*;
 
 #[cfg(test)]
-pub(crate) use crate::test_utils::TestGrid;
+pub(crate) use crate::test_utils::{DebugGridTileColor, TestGrid};

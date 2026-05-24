@@ -346,17 +346,14 @@ impl Grid {
     pub fn ascii_debug_map(
         &self,
         show_move_chars: bool,
-        remap_tile: Option<impl Fn(Coords) -> Option<char>>,
+        remap_tile: Option<impl Fn(Coords) -> Option<(char, DebugGridTileColor)>>,
     ) -> String {
-        use ansi_term::Color;
-
         let size = self.grid_size();
         let mut dbg_map = String::with_capacity(size.element_product() as _);
-        let bg_col = Color::RGB(40, 40, 40);
-        let header_style = Color::RGB(170, 170, 170).on(bg_col).prefix().to_string();
         let x_axis = (0..self.grid_size.x)
             .map(|i| (i % 10).to_string())
             .collect::<String>();
+        let header_style = DebugGridTileColor::Header.prefix();
         dbg_map.push_str(&format!("{header_style} _{}_ \n", &x_axis));
         dbg_map.push_str(&format!("{header_style} 0"));
         let mut prev_y = 0;
@@ -367,29 +364,28 @@ impl Grid {
                 dbg_map.push('\n');
                 dbg_map.push_str(&format!("{header_style}{:2}", tile.y));
             }
-            let main_col = Color::RGB(255, 255, 255);
-            let (c, col) = match remap_tile.as_ref().and_then(|map| map(tile)) {
-                Some(c) => (c, main_col),
-                None => match self.occupied_tiles.get(&tile) {
+            let (c, col) = remap_tile
+                .as_ref()
+                .and_then(|map| map(tile))
+                .unwrap_or_else(|| match self.occupied_tiles.get(&tile) {
                     Some(TileObject { kind, .. }) => match kind {
-                        TileObjectKind::Enemy => ('*', Color::Red),
-                        TileObjectKind::Wall(_) => ('#', main_col),
-                        TileObjectKind::Goal => ('G', main_col),
+                        TileObjectKind::Enemy => ('*', DebugGridTileColor::Red),
+                        TileObjectKind::Wall(_) => ('#', DebugGridTileColor::White),
+                        TileObjectKind::Goal => ('G', DebugGridTileColor::White),
                     },
-                    None if tile == self.player_tile() => ('@', Color::Green),
+                    None if tile == self.player_tile() => ('@', DebugGridTileColor::Green),
                     None => self.targetable_tiles.get(&tile).map_or(
-                        ('■', Color::RGB(170, 170, 170)),
+                        ('■', DebugGridTileColor::Dimmed),
                         |tt| {
                             if show_move_chars {
-                                (tt.move_char, main_col)
+                                (tt.move_char, DebugGridTileColor::White)
                             } else {
-                                ('.', main_col)
+                                ('.', DebugGridTileColor::White)
                             }
                         },
                     ),
-                },
-            };
-            dbg_map.push_str(&col.on(bg_col).paint(c.to_string()).to_string());
+                });
+            dbg_map.push_str(&col.colored(c));
         }
         dbg_map.push_str(&format!(
             "{header_style}{} \n{header_style} _{}_ ",
@@ -403,7 +399,7 @@ impl Grid {
     pub fn print_ascii_debug_map(
         &self,
         show_move_chars: bool,
-        remap_tile: Option<impl Fn(Coords) -> Option<char>>,
+        remap_tile: Option<impl Fn(Coords) -> Option<(char, DebugGridTileColor)>>,
     ) {
         println!("{}", self.ascii_debug_map(show_move_chars, remap_tile));
     }
