@@ -63,7 +63,7 @@ impl Wallie {
             }
             (0, None, Some(backtracking_dir)) => {
                 let next_tile = current_tile + backtracking_dir;
-                // tracing::warn!(?neighbours, "backtracking\n");
+                tracing::warn!(?neighbours, "backtracking\n");
                 next_tile
             }
             (_, Some(next_tile), _) => {
@@ -186,7 +186,7 @@ mod tests {
           tile: Coords::new(0, 1),
           anchor: Coords::new(2, 0),
           backtracking_dir: Some(Coords::new(0, 1))
-        } ; "CW - up-left deadend"
+        } ; "CW: [0, 0] => [0, 1] - up-left deadend"
     )]
     #[test_case(
         RotationDirection::Clockwise,
@@ -201,7 +201,7 @@ mod tests {
           tile: Coords::new(1, 1),
           anchor: Coords::new(2, 1),
           backtracking_dir: None
-        }
+        } ; "CW: [0, 1] => [1, 1]"
     )]
     #[test_case(
         RotationDirection::Clockwise,
@@ -216,7 +216,7 @@ mod tests {
           tile: Coords::new(1, 2),
           anchor: Coords::new(1, 3),
           backtracking_dir: None
-        }
+        } ; "CW: [1, 1] => [1, 2]"
     )]
     #[test_case(
         RotationDirection::Clockwise,
@@ -231,7 +231,7 @@ mod tests {
           tile: Coords::new(2, 2),
           anchor: Coords::new(2, 3),
           backtracking_dir: None
-        }
+        } ; "CW: [1, 2] => [2, 2]"
     )]
     #[test_case(
         RotationDirection::Clockwise,
@@ -246,7 +246,7 @@ mod tests {
           tile: Coords::new(3, 2),
           anchor: Coords::new(3, 3),
           backtracking_dir: None
-        } ; "CW: btm-right dead-end"
+        } ; "CW: [2, 2] => [3, 2] - btm-right dead-end"
     )]
     #[test_case(
         RotationDirection::Clockwise,
@@ -261,7 +261,7 @@ mod tests {
           tile: Coords::new(2, 2),
           anchor: Coords::new(2, 3),
           backtracking_dir: Some(TileDir::new(-1, 0))
-        } ; "CW: leaving btm-right dead-end"
+        } ; "CW: [3, 2] => [2, 2] - exiting btm-right dead-end"
     )]
     #[test_case(
         RotationDirection::Clockwise,
@@ -276,7 +276,7 @@ mod tests {
           tile: Coords::new(1, 2),
           anchor: Coords::new(1, 3),
           backtracking_dir: None
-        } ; "CW: left btm-right dead-end"
+        } ; "CW: [2, 2] => [1, 2] - exit btm-right dead-end"
     )]
     #[test_case(
         RotationDirection::Clockwise,
@@ -291,7 +291,7 @@ mod tests {
           tile: Coords::new(0, 2),
           anchor: Coords::new(-1, 2),
           backtracking_dir: None
-        }
+        } ; "CW: [1, 2] => [0, 2]"
     )]
     #[test_case(
         RotationDirection::Clockwise,
@@ -306,7 +306,7 @@ mod tests {
           tile: Coords::new(0, 1),
           anchor: Coords::new(-1, 1),
           backtracking_dir: None
-        }
+        } ; "CW: [0, 2] => [0, 1]"
     )]
     #[test_case(
         RotationDirection::Clockwise,
@@ -321,7 +321,7 @@ mod tests {
           tile: Coords::new(0, 0),
           anchor: Coords::new(1, 0),
           backtracking_dir: None
-        }
+        } ; "CW: [0, 1] => [0, 0]"
     )]
     // CCW direction
     #[test_case(
@@ -337,7 +337,7 @@ mod tests {
           tile: Coords::new(0, 1),
           anchor: Coords::new(-1, 1),
           backtracking_dir: None
-        }
+        } ; "CCW: [0, 0] => [0, 1]"
     )]
     #[test_case(
         RotationDirection::CounterClockwise,
@@ -352,7 +352,7 @@ mod tests {
           tile: Coords::new(0, 2),
           anchor: Coords::new(0, 3),
           backtracking_dir: None
-        }
+        } ; "CCW: [0, 1] => [0, 2]"
     )]
     #[test_case(
         RotationDirection::CounterClockwise,
@@ -367,7 +367,7 @@ mod tests {
           tile: Coords::new(1, 2),
           anchor: Coords::new(1, 3),
           backtracking_dir: None
-        }
+        } ; "CCW: [0, 2] => [1, 2]"
     )]
     #[test_case(
         RotationDirection::CounterClockwise,
@@ -382,7 +382,7 @@ mod tests {
           tile: Coords::new(2, 2),
           anchor: Coords::new(2, 3),
           backtracking_dir: None
-        }
+        } ; "CCW: [1, 2] => [2, 2]"
     )]
     #[test_case(
         RotationDirection::CounterClockwise,
@@ -397,7 +397,7 @@ mod tests {
           tile: Coords::new(3, 2),
           anchor: Coords::new(3, 1),
           backtracking_dir: None
-        } ; "CCW: btm-right dead-end"
+        } ; "CCW: [2, 2] => [3, 2] - btm-right dead-end"
     )]
     #[test_case(
         RotationDirection::CounterClockwise,
@@ -412,7 +412,7 @@ mod tests {
           tile: Coords::new(2, 2),
           anchor: Coords::new(2, 1),
           backtracking_dir: Some(TileDir::new(-1, 0))
-        } ; "CCW: leaving btm-right dead-end"
+        } ; "CCW: [3, 2] -> [2, 2] - exiting btm-right dead-end"
     )]
     #[test_case(
         RotationDirection::CounterClockwise,
@@ -427,7 +427,7 @@ mod tests {
           tile: Coords::new(1, 2),
           anchor: Coords::new(2, 1),
           backtracking_dir: None
-        } ; "CCW: left btm-right dead-end"
+        } ; "CCW: [2, 2] => [1, 2] - exit btm-right dead-end"
     )]
     #[test_case(
         RotationDirection::CounterClockwise,
@@ -442,7 +442,7 @@ mod tests {
           tile: Coords::new(1, 1),
           anchor: Coords::new(1, 0),
           backtracking_dir: None
-        }
+        } ; "CCW: [1, 2] => [1, 1]"
     )]
     #[test_case(
         RotationDirection::CounterClockwise,
@@ -457,7 +457,7 @@ mod tests {
           tile: Coords::new(0, 1),
           anchor: Coords::new(1, 0),
           backtracking_dir: None
-        }
+        } ; "CCW: [1, 1] => [0, 1]"
     )]
     #[test_case(
         RotationDirection::CounterClockwise,
@@ -472,7 +472,7 @@ mod tests {
           tile: Coords::new(0, 0),
           anchor: Coords::new(-1, 0),
           backtracking_dir: None
-        }
+        } ; "CCW: [0, 1] => [0, 0]"
     )]
     #[traced_test]
     fn step(rot_dir: RotationDirection, initial_state: WallEStepData, expected: WallEStepData) {
