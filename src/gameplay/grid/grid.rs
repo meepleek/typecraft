@@ -343,7 +343,11 @@ impl Grid {
     }
 
     #[cfg(test)]
-    pub fn ascii_debug_map(&self, show_move_chars: bool) -> String {
+    pub fn ascii_debug_map(
+        &self,
+        show_move_chars: bool,
+        remap_tile: Option<impl Fn(Coords) -> Option<char>>,
+    ) -> String {
         use ansi_term::Color;
 
         let size = self.grid_size();
@@ -364,23 +368,26 @@ impl Grid {
                 dbg_map.push_str(&format!("{header_style}{:2}", tile.y));
             }
             let main_col = Color::RGB(255, 255, 255);
-            let (c, col) = match self.occupied_tiles.get(&tile) {
-                Some(TileObject { kind, .. }) => match kind {
-                    TileObjectKind::Enemy => ('*', Color::Red),
-                    TileObjectKind::Wall(_) => ('#', main_col),
-                    TileObjectKind::Goal => ('G', main_col),
-                },
-                None if tile == self.player_tile() => ('@', Color::Green),
-                None => self.targetable_tiles.get(&tile).map_or(
-                    ('■', Color::RGB(170, 170, 170)),
-                    |tt| {
-                        if show_move_chars {
-                            (tt.move_char, main_col)
-                        } else {
-                            ('.', main_col)
-                        }
+            let (c, col) = match remap_tile.as_ref().and_then(|map| map(tile)) {
+                Some(c) => (c, main_col),
+                None => match self.occupied_tiles.get(&tile) {
+                    Some(TileObject { kind, .. }) => match kind {
+                        TileObjectKind::Enemy => ('*', Color::Red),
+                        TileObjectKind::Wall(_) => ('#', main_col),
+                        TileObjectKind::Goal => ('G', main_col),
                     },
-                ),
+                    None if tile == self.player_tile() => ('@', Color::Green),
+                    None => self.targetable_tiles.get(&tile).map_or(
+                        ('■', Color::RGB(170, 170, 170)),
+                        |tt| {
+                            if show_move_chars {
+                                (tt.move_char, main_col)
+                            } else {
+                                ('.', main_col)
+                            }
+                        },
+                    ),
+                },
             };
             dbg_map.push_str(&col.on(bg_col).paint(c.to_string()).to_string());
         }
@@ -393,8 +400,12 @@ impl Grid {
     }
 
     #[cfg(test)]
-    pub fn print_ascii_debug_map(&self, show_move_chars: bool) {
-        println!("{}", self.ascii_debug_map(show_move_chars));
+    pub fn print_ascii_debug_map(
+        &self,
+        show_move_chars: bool,
+        remap_tile: Option<impl Fn(Coords) -> Option<char>>,
+    ) {
+        println!("{}", self.ascii_debug_map(show_move_chars, remap_tile));
     }
 }
 
