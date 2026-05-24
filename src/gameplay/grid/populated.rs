@@ -206,16 +206,16 @@ impl PopulatedGrid {
                                 }
                             });
                             if anchor.is_none() {
-                                tracing::warn!(t=?*t, "Wall-E tile without a nearby anchor");
+                                tracing::warn!(t=?*t, "Wallie tile without a nearby anchor");
                             }
                             anchor.map(|anchor| {
                                 b.spawn((
                                     // todo: proper anchor, prev & direction
                                     // possibly pass in a tile + grid instead so it's easier to test
-                                    enemy::wall_e::wall_e(
+                                    enemy::wallie::wallie(
                                         *t,
                                         anchor,
-                                        enemy::wall_e::WallieDirection::CounterClockwise,
+                                        enemy::wallie::WallieDirection::CounterClockwise,
                                     ),
                                     self.spawn_transform(*t),
                                 ))

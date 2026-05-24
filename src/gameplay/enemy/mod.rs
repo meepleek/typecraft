@@ -1,9 +1,9 @@
 use bevy::prelude::*;
 
-pub mod wall_e;
+pub mod wallie;
 
 pub(super) fn plugin(app: &mut App) {
-    app.add_plugins((wall_e::plugin,));
+    app.add_plugins((wallie::plugin,));
 }
 
 #[derive(Component, Debug, Clone, Copy, PartialEq, Eq, Default, Reflect)]

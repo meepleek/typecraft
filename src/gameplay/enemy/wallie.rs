@@ -3,18 +3,18 @@ use bevy::{color::palettes::tailwind, time::common_conditions::on_real_timer};
 use crate::prelude::*;
 
 pub(super) fn plugin(app: &mut App) {
-    // app.add_systems(Update, wall_e_move.run_if(on_real_timer(ms(1500))));
-    app.add_systems(Update, wall_e_move.run_if(on_real_timer(ms(500))));
+    // app.add_systems(Update, wallie_move.run_if(on_real_timer(ms(1500))));
+    app.add_systems(Update, wallie_move.run_if(on_real_timer(ms(500))));
 }
 
 #[derive(Component, Debug, Clone, Copy, PartialEq, Reflect)]
 #[reflect(Component)]
-pub struct WallE {
+pub struct Wallie {
     anchor: Coords,
     previous_tile: Coords,
     direction: WallieDirection,
 }
-impl WallE {
+impl Wallie {
     fn step(&mut self, current_tile: Coords, grid: &grid::Grid) -> Coords {
         fn is_deadend_anchor(grid: &grid::Grid, tile: Coords, next_tile: Coords) -> bool {
             grid.unoccupied_targetable_neighbours(tile, tile::TileDirection::All)
@@ -89,11 +89,11 @@ pub enum WallieDirection {
     CounterClockwise,
 }
 
-pub fn wall_e(tile: Coords, anchor: Coords, direction: WallieDirection) -> impl Bundle {
+pub fn wallie(tile: Coords, anchor: Coords, direction: WallieDirection) -> impl Bundle {
     (
         super::Enemy,
         ObjectCoords(tile),
-        WallE {
+        Wallie {
             anchor,
             // used as a deny list for movement
             // so using the initial position is fine
@@ -106,9 +106,9 @@ pub fn wall_e(tile: Coords, anchor: Coords, direction: WallieDirection) -> impl 
     )
 }
 
-fn wall_e_move(
+fn wallie_move(
     grid: Option<Single<&grid::Grid>>,
-    mut enemy_q: Query<(&mut ObjectCoords, &mut WallE)>,
+    mut enemy_q: Query<(&mut ObjectCoords, &mut Wallie)>,
 ) {
     let grid = or_return_quiet!(grid);
     for (mut coords, mut walle) in &mut enemy_q {
@@ -411,7 +411,7 @@ mod tests {
             initial_state.tile.into(),
         )
         .expect("Failed to place enemy");
-        let mut walle = WallE {
+        let mut walle = Wallie {
             direction,
             anchor: initial_state.anchor.into(),
             previous_tile: initial_state.prev_tile.into(),
