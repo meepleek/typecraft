@@ -205,40 +205,46 @@ impl PopulatedGrid {
                                     None
                                 }
                             });
-                            match anchor {
-                                Some(anchor) => b
-                                    .spawn((
-                                        enemy::wall_e::wall_e(*t, anchor),
-                                        self.spawn_transform(*t),
-                                    ))
-                                    .id(),
-                                None => {
-                                    tracing::warn!(t=?*t, "Wall-E tile without a nearby anchor");
-                                    // todo: allow returning None here
-                                    b.spawn(()).id()
-                                }
+                            if anchor.is_none() {
+                                tracing::warn!(t=?*t, "Wall-E tile without a nearby anchor");
                             }
+                            anchor.map(|anchor| {
+                                b.spawn((
+                                    // todo: proper anchor, prev & direction
+                                    // possibly pass in a tile + grid instead so it's easier to test
+                                    enemy::wall_e::wall_e(
+                                        *t,
+                                        anchor,
+                                        enemy::wall_e::WallieDirection::CounterClockwise,
+                                    ),
+                                    self.spawn_transform(*t),
+                                ))
+                                .id()
+                            })
                         }
-                        TileObjectKind::Wall(typable_words) => b
-                            .spawn((
+                        TileObjectKind::Wall(typable_words) => Some(
+                            b.spawn((
                                 wall::wall(typable_words, self.is_player_ortho_tile(*t)),
                                 self.spawn_transform(*t),
                             ))
                             .id(),
+                        ),
                         TileObjectKind::Goal => {
                             // todo:
-                            b.spawn(()).id()
+                            None
                         }
                     };
 
-                    grid.place_object(
-                        tile::TileObject {
-                            entity,
-                            kind: kind.clone(),
-                        },
-                        *t,
-                    )
-                    .expect("Failed to place tile object");
+                    if let Some(entity) = entity {
+                        grid.place_object(
+                            tile::TileObject {
+                                entity,
+                                kind: kind.clone(),
+                            },
+                            *t,
+                        )
+                        .expect("Failed to place tile object");
+                    }
                 }
             }
 
