@@ -40,6 +40,34 @@ impl Wallie {
                 .all(|utn| utn.tile == next_tile)
         }
 
+        fn valid_anchors(
+            tile: Coords,
+            dir: TileDir,
+            mut possible_anchor_dirs: [Coords; 4],
+            grid: &grid::Grid,
+        ) -> Option<Coords> {
+            let dir_i = possible_anchor_dirs
+                .iter()
+                .position(|d| *d == dir)
+                .expect("Failed to find index of anchor dir");
+            possible_anchor_dirs.rotate_left(dir_i);
+            tracing::warn!(?dir, ?dir_i, ?possible_anchor_dirs);
+            possible_anchor_dirs
+                .into_iter()
+                .filter_map(|d| {
+                    let anchor_tile = tile + d;
+                    if !grid.is_wall_tile(anchor_tile)
+                    // skip the movement dir, 'cause that's already handled above
+                    || d == dir
+                    || tile.manhattan_distance(anchor_tile) != 1
+                    {
+                        return None;
+                    }
+                    Some(anchor_tile)
+                })
+                .next()
+        }
+
         let neighbours = grid
             .unoccupied_targetable_neighbours(current_tile, tile::TileDirection::Orthogonal)
             // .inspect(|utn| tracing::warn!(t=?utn.tile, "pre-filter"))
@@ -73,15 +101,17 @@ impl Wallie {
             }
             _ => unreachable!(),
         };
+
         self.prev_tile = current_tile;
+        let dir = next_tile - current_tile;
 
         // update anchor
         // wall-hit anchor change
-        let dir = next_tile - current_tile;
         let maybe_corner_tile = next_tile + dir;
         if grid.is_wall_tile(maybe_corner_tile)
             && !is_deadend_anchor(grid, maybe_corner_tile, next_tile)
         {
+            tracing::warn!("WALL-HIT!");
             self.anchor = maybe_corner_tile;
             return next_tile;
         }
@@ -93,38 +123,18 @@ impl Wallie {
         if ccw {
             possible_anchor_dirs.reverse();
         }
-        let dir_to_check = if self.backtracking_dir.is_some() && ccw {
-            -dir
-        } else {
-            dir
-        };
-        let dir_i = possible_anchor_dirs
-            .iter()
-            .position(|d| *d == dir_to_check)
-            .expect("Failed to find index of anchor dir");
-        possible_anchor_dirs.rotate_left(dir_i);
-        // tracing::warn!(?possible_anchor_dirs);
-        let moved_anchor = possible_anchor_dirs
-            .into_iter()
-            .filter_map(|d| {
-                let tile = if self.backtracking_dir.is_some() && ccw {
-                    current_tile
-                } else {
-                    next_tile
-                };
-                let anchor_tile = tile + d;
-                if !grid.is_wall_tile(anchor_tile)
-                    // skip the movement dir, 'cause that's already handled above
-                    || d == dir_to_check
-                    || tile.manhattan_distance(anchor_tile) != 1
-                {
-                    return None;
-                }
-                Some(anchor_tile)
-            })
-            .next();
+
+        let moved_anchor = valid_anchors(next_tile, dir, possible_anchor_dirs, &grid);
+        // .or_else(|| valid_anchors(current_tile, dir, possible_anchor_dirs, &grid));
+
+        // let dir_to_check = if self.backtracking_dir.is_some() && ccw {
+        //     -dir
+        // } else {
+        //     dir
+        // };
+
         if let Some(moved_anchor) = moved_anchor {
-            // tracing::warn!(leaving=?self.backtracking_dir, "============\nmoved anchor tile");
+            tracing::warn!(leaving=?self.backtracking_dir, "============\nmoved anchor tile");
             self.anchor = moved_anchor;
             return next_tile;
         }
@@ -380,7 +390,7 @@ mod tests {
         WallEStepData {
           prev_tile : Coords::new(1, 2),
           tile: Coords::new(2, 2),
-          anchor: Coords::new(2, 3),
+          anchor: Coords::new(2, 1),
           backtracking_dir: None
         } ; "CCW: [1, 2] => [2, 2]"
     )]
@@ -389,7 +399,7 @@ mod tests {
         WallEStepData {
           prev_tile : Coords::new(1, 2),
           tile: Coords::new(2, 2),
-          anchor: Coords::new(2, 3),
+          anchor: Coords::new(2, 1),
           backtracking_dir: None
         },
         WallEStepData {
@@ -455,7 +465,7 @@ mod tests {
         WallEStepData {
           prev_tile : Coords::new(1, 1),
           tile: Coords::new(0, 1),
-          anchor: Coords::new(1, 0),
+          anchor: Coords::new(-1, 1),
           backtracking_dir: None
         } ; "CCW: [1, 1] => [0, 1]"
     )]
@@ -464,7 +474,7 @@ mod tests {
         WallEStepData {
           prev_tile : Coords::new(1, 1),
           tile: Coords::new(0, 1),
-          anchor: Coords::new(1, 0),
+          anchor: Coords::new(-1, 1),
           backtracking_dir: None
         },
         WallEStepData {
@@ -477,9 +487,10 @@ mod tests {
     #[traced_test]
     fn step(rot_dir: RotationDirection, initial_state: WallEStepData, expected: WallEStepData) {
         let mut grid = TestGrid::from_str(TEST_LVL);
+        let entity = Entity::PLACEHOLDER;
         grid.place_object(
             tile::TileObject {
-                entity: Entity::PLACEHOLDER,
+                entity,
                 kind: tile::TileObjectKind::Enemy,
             },
             initial_state.tile.into(),
@@ -492,7 +503,6 @@ mod tests {
             backtracking_dir: initial_state.backtracking_dir,
         };
         // tracing::warn!(?wallie);
-        grid.print_ascii_debug_map(false);
 
         let next_tile = wallie.step(initial_state.tile.into(), &grid);
         let actual = WallEStepData {
@@ -501,6 +511,33 @@ mod tests {
             anchor: wallie.anchor,
             backtracking_dir: wallie.backtracking_dir,
         };
+
+        grid.print_ascii_debug_map(
+            false,
+            Some(move |t| {
+                if t == actual.tile {
+                    Some(('*', DebugGridTileColor::Red))
+                } else if t == actual.prev_tile {
+                    let dir = actual.tile - actual.prev_tile;
+                    Some((
+                        match (dir.x, dir.y) {
+                            (0, -1) => '🢁',
+                            (1, 0) => '🢂',
+                            (0, 1) => '🢃',
+                            (-1, 0) => '🡸',
+                            _ => unreachable!(),
+                        },
+                        DebugGridTileColor::White,
+                    ))
+                } else if t == expected.anchor {
+                    Some(('⨯', DebugGridTileColor::Red))
+                } else if t == actual.anchor {
+                    Some(('⨯', DebugGridTileColor::Green))
+                } else {
+                    None
+                }
+            }),
+        );
 
         pretty_assertions::assert_eq!(expected, actual)
     }
