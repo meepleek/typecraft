@@ -362,7 +362,10 @@ fn move_tile_object(
     for (e, tc, is_player) in tile_q {
         let tile = tc.0;
         let prev_tile = or_continue!(grid.entity_to_coords(e));
-        // also need to fade in/out the from/to move chars
+        if tile == prev_tile {
+            tracing::warn!(?e, ?prev_tile, ?tile, "nowhere to move tile object");
+            continue;
+        }
         let world_pos = or_return!(grid.tile_to_world(tile));
         let (start_tile, end_tile) = if is_player {
             let start_tile = or_return!(grid.get_targetable_tile(grid.player_tile())).clone();
