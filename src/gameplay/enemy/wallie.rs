@@ -35,77 +35,87 @@ impl Wallie {
     fn step(&mut self, current_tile: Coords, grid: &grid::Grid) -> Coords {
         use {RotationDirection::*, TileOrthoDir::*};
 
-        let (target_dir, wall_dir) = match (self.rot_dir, self.tile_edge) {
-            (Clockwise, North) => (Coords::X, Coords::new(1, -1)),
-            (Clockwise, East) => (Coords::Y, Coords::ONE),
-            (Clockwise, South) => (Coords::NEG_X, Coords::new(-1, 1)),
-            (Clockwise, West) => (Coords::NEG_Y, Coords::NEG_ONE),
-            (CounterClockwise, North) => todo!(),
-            (CounterClockwise, East) => todo!(),
-            (CounterClockwise, South) => todo!(),
-            (CounterClockwise, West) => todo!(),
-        };
-        let target_tile = current_tile + target_dir;
-        let wall_tile = current_tile + wall_dir;
-        let target_tile_valid =
-            grid.is_targetable_tile(target_tile) && !grid.is_occupied_tile(target_tile);
-        let wall_tile_valid = grid.is_wall_tile(wall_tile);
-        match (target_tile_valid, wall_tile_valid) {
-            (true, true) => {
-                // continue to next tile, same edge
-                target_tile
-            }
-            (true, false) => {
-                let prev_edge = self.tile_edge;
-                self.tile_edge = match self.rot_dir {
-                    Clockwise => self.tile_edge.rotate_ccw(),
-                    CounterClockwise => todo!(),
-                };
-                tracing::warn!(edge=?self.tile_edge, dir=?self.tile_edge.direction(), "rotate around corner");
-                // actually this doesn't work as there are ambiguities
-                // e.g. East => North can go to 2 different souths
-                // but maybe that's fine given the previous checks
-                // so this just needs to check the appropriate change
-                // or maybe another check is required to determine when
-                // wallie is going round in the same corner
-                current_tile
-                    + match (prev_edge, self.tile_edge) {
-                        (North, East) => Coords::NEG_ONE,
-                        (East, North) => Coords::ONE,
-                        (South, East) => Coords::new(-1, 1),
-                        (East, South) => Coords::new(1, -1),
-                        (South, West) => Coords::ONE,
-                        (West, South) => Coords::NEG_ONE,
-                        (North, West) => Coords::new(1, -1),
-                        (West, North) => Coords::NEG_ONE,
-                        (North, North)
-                        | (North, South)
-                        | (East, East)
-                        | (East, West)
-                        | (South, South)
-                        | (South, North)
-                        | (West, West)
-                        | (West, East) => unreachable!("Invalid round corner rotation"),
-                    }
-            }
-            (false, _) => {
-                if grid.is_wall_tile(target_tile) {
-                    self.tile_edge = match self.rot_dir {
-                        Clockwise => self.tile_edge.rotate_cw(),
-                        CounterClockwise => todo!(),
-                    };
-                    current_tile
+        fn step_impl(
+            wallie: &mut Wallie,
+            current_tile: Coords,
+            grid: &grid::Grid,
+            has_flipped: bool,
+        ) -> Coords {
+            let (target_dir, wall_dir) = match (wallie.rot_dir, wallie.tile_edge) {
+                (Clockwise, North) => (Coords::X, Coords::new(1, -1)),
+                (Clockwise, East) => (Coords::Y, Coords::ONE),
+                (Clockwise, South) => (Coords::NEG_X, Coords::new(-1, 1)),
+                (Clockwise, West) => (Coords::NEG_Y, Coords::NEG_ONE),
+                (CounterClockwise, North) => (Coords::NEG_X, Coords::NEG_ONE),
+                (CounterClockwise, East) => (Coords::NEG_Y, Coords::ONE),
+                (CounterClockwise, West) => (Coords::Y, Coords::new(-1, 1)),
+                (CounterClockwise, South) => (Coords::X, Coords::ONE),
+            };
+            let target_tile = current_tile + target_dir;
+            let wall_tile = current_tile + wall_dir;
+            let target_tile_valid =
+                grid.is_targetable_tile(target_tile) && !grid.is_occupied_tile(target_tile);
+            let wall_tile_valid = grid.is_wall_tile(wall_tile);
+            match (target_tile_valid, wall_tile_valid) {
+                (true, true) => {
+                    // continue to next tile, same edge
+                    target_tile
                 }
-                // todo: also check for deadends here or is that handled by the previous branch?
-                else {
-                    // can't continue - turn around
-                    self.rot_dir = !self.rot_dir;
-                    // rerun the whole thing
-                    // todo: add some recursion bool or smt. to prevent stack overflow
-                    self.step(current_tile, grid)
+                (true, false) => {
+                    let prev_edge = wallie.tile_edge;
+                    wallie.tile_edge = match wallie.rot_dir {
+                        Clockwise => wallie.tile_edge.rotate_ccw(),
+                        CounterClockwise => wallie.tile_edge.rotate_cw(),
+                    };
+                    // actually this doesn't work as there are ambiguities
+                    // e.g. East => North can go to 2 different souths
+                    // but maybe that's fine given the previous checks
+                    // so this just needs to check the appropriate change
+                    // or maybe another check is required to determine when
+                    // wallie is going round in the same corner
+                    current_tile
+                        + match (prev_edge, wallie.tile_edge) {
+                            (North, East) => Coords::NEG_ONE,
+                            (East, North) => Coords::ONE,
+                            (South, East) => Coords::new(-1, 1),
+                            (East, South) => Coords::new(1, -1),
+                            (South, West) => Coords::ONE,
+                            (West, South) => Coords::NEG_ONE,
+                            (North, West) => Coords::new(1, -1),
+                            (West, North) => Coords::NEG_ONE,
+                            (North, North)
+                            | (North, South)
+                            | (East, East)
+                            | (East, West)
+                            | (South, South)
+                            | (South, North)
+                            | (West, West)
+                            | (West, East) => unreachable!("Invalid round corner rotation"),
+                        }
+                }
+                (false, _) => {
+                    if grid.is_wall_tile(target_tile) {
+                        wallie.tile_edge = match wallie.rot_dir {
+                            Clockwise => wallie.tile_edge.rotate_cw(),
+                            CounterClockwise => wallie.tile_edge.rotate_ccw(),
+                        };
+                        current_tile
+                    }
+                    // todo: also check for dead-ends here or is that handled by the previous branch?
+                    else if !has_flipped {
+                        // can't continue - turn around
+                        wallie.rot_dir = !wallie.rot_dir;
+                        // rerun the whole thing
+                        step_impl(wallie, current_tile, grid, true)
+                    } else {
+                        tracing::error!(?wallie, "failed to step even after flipping");
+                        current_tile
+                    }
                 }
             }
         }
+
+        step_impl(self, current_tile, grid, false)
     }
 }
 
