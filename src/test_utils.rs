@@ -114,7 +114,11 @@ impl TestGrid {
         Self::from_populated(populated)
     }
 
+    pub fn rng_from_seed(seed: u64) -> impl Rng {
+        StdRng::seed_from_u64(seed.into())
+    }
+
     pub fn seeded_rng() -> impl Rng {
-        StdRng::seed_from_u64(42)
+        Self::rng_from_seed(42)
     }
 }

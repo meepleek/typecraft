@@ -19,6 +19,7 @@ impl Wallie {
     }
 
     pub fn from_origin_tile(grid: &grid::Grid, tile: Coords, rng: &mut impl Rng) -> Option<Self> {
+        grid.can_place_at(tile).ok()?;
         let dir = grid::DIRS_ORTHO_CW
             .into_iter()
             .filter(|dir| grid.is_wall_tile(tile + dir))
@@ -166,7 +167,51 @@ mod tests {
 
     use super::*;
 
-    const TEST_LVL: &'static str = "
+    const TEST_CTOR_LVL: &'static str = "
+    ..#
+    ...
+    ...
+    ...
+    @G.
+";
+
+    #[test_case(
+        Coords::ZERO,
+        Some(Wallie {
+            rot_dir: RotationDirection::Clockwise,
+            tile_edge:TileOrthoDir::West
+        }))]
+    #[test_case(
+        Coords::X,
+        Some(Wallie {
+            rot_dir: RotationDirection::Clockwise,
+            tile_edge:TileOrthoDir::East
+        }))]
+    #[test_case(
+        Coords::new(0, 2),
+        Some(Wallie {
+            rot_dir: RotationDirection::CounterClockwise,
+            tile_edge:TileOrthoDir::West
+        }))]
+    #[test_case(
+        Coords::new(2, 2),
+        Some(Wallie {
+            rot_dir: RotationDirection::CounterClockwise,
+            tile_edge:TileOrthoDir::East
+        }))]
+    #[test_case(Coords::new(2, 0), None)]
+    #[test_case(Coords::new(0, 4), None)]
+    #[test_case(Coords::new(1, 2), None)]
+    #[traced_test]
+    fn from_origin_tile(tile: Coords, expected: Option<Wallie>) {
+        let grid = TestGrid::from_str(TEST_CTOR_LVL);
+
+        let actual = Wallie::from_origin_tile(&grid, tile, &mut TestGrid::seeded_rng());
+
+        pretty_assertions::assert_eq!(expected, actual);
+    }
+
+    const TEST_STEP_LVL: &'static str = "
     .WWW
     ..WW
     ....
@@ -536,7 +581,7 @@ mod tests {
     )]
     #[traced_test]
     fn step(rot_dir: RotationDirection, initial_state: WallEStepData, expected: WallEStepData) {
-        let mut grid = TestGrid::from_str(TEST_LVL);
+        let mut grid = TestGrid::from_str(TEST_STEP_LVL);
         let entity = Entity::PLACEHOLDER;
         grid.place_object(
             tile::TileObject {
