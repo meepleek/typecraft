@@ -18,21 +18,47 @@ pub enum TileOrthoDir {
 }
 impl TileOrthoDir {
     pub fn from_direction(dir: Coords) -> Option<Self> {
+        use TileOrthoDir::*;
+
         match dir {
-            Coords::NEG_Y => Some(TileOrthoDir::North),
-            Coords::X => Some(TileOrthoDir::East),
-            Coords::Y => Some(TileOrthoDir::South),
-            Coords::NEG_X => Some(TileOrthoDir::West),
+            Coords::NEG_Y => Some(North),
+            Coords::X => Some(East),
+            Coords::Y => Some(South),
+            Coords::NEG_X => Some(West),
             _ => None,
         }
     }
 
     pub fn direction(&self) -> Coords {
+        use TileOrthoDir::*;
+
         match self {
-            TileOrthoDir::North => Coords::NEG_Y,
-            TileOrthoDir::East => Coords::X,
-            TileOrthoDir::South => Coords::Y,
-            TileOrthoDir::West => Coords::NEG_X,
+            North => Coords::NEG_Y,
+            East => Coords::X,
+            South => Coords::Y,
+            West => Coords::NEG_X,
+        }
+    }
+
+    pub fn rotate_cw(&self) -> Self {
+        use TileOrthoDir::*;
+
+        match self {
+            North => East,
+            East => South,
+            South => West,
+            West => North,
+        }
+    }
+
+    pub fn rotate_ccw(&self) -> Self {
+        use TileOrthoDir::*;
+
+        match self {
+            North => West,
+            East => North,
+            South => East,
+            West => South,
         }
     }
 }
