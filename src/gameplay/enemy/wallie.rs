@@ -4,7 +4,7 @@ use std::ops::Not;
 
 pub(super) fn plugin(app: &mut App) {
     // app.add_systems(Update, wallie_move.run_if(on_real_timer(ms(1500))));
-    app.add_systems(Update, wallie_move.run_if(on_real_timer(ms(500))));
+    app.add_systems(Update, Wallie::run_step.run_if(on_real_timer(ms(500))));
 }
 
 #[derive(Component, Debug, Clone, Copy, PartialEq, Reflect)]
@@ -131,6 +131,20 @@ impl Wallie {
 
         step_impl(self, current_tile, grid, false)
     }
+
+    fn run_step(
+        grid: Option<Single<&grid::Grid>>,
+        mut enemy_q: Query<(&mut ObjectCoords, &mut Wallie)>,
+    ) {
+        let grid = or_return_quiet!(grid);
+        for (mut coords, mut walle) in &mut enemy_q {
+            let prev_tile = coords.0;
+            let tile = walle.step(coords.0, &grid);
+            if prev_tile != tile {
+                coords.0 = tile;
+            }
+        }
+    }
 }
 
 #[derive(Debug, PartialEq, Clone, Copy, Reflect)]
@@ -146,17 +160,6 @@ impl Not for RotationDirection {
             RotationDirection::Clockwise => RotationDirection::CounterClockwise,
             RotationDirection::CounterClockwise => RotationDirection::Clockwise,
         }
-    }
-}
-
-fn wallie_move(
-    grid: Option<Single<&grid::Grid>>,
-    mut enemy_q: Query<(&mut ObjectCoords, &mut Wallie)>,
-) {
-    let grid = or_return_quiet!(grid);
-    for (mut coords, mut walle) in &mut enemy_q {
-        let tile = walle.step(coords.0, &grid);
-        coords.0 = tile;
     }
 }
 

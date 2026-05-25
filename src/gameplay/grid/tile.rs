@@ -373,7 +373,13 @@ fn move_tile_object(
             grid.move_player(tile);
             (start_tile, end_tile)
         } else {
-            or_return!(grid.move_object(e, tile))
+            match grid.move_object(e, tile) {
+                Ok(res) => res,
+                Err(err) => {
+                    tracing::warn!(?tile, ?err, "Failed to move object");
+                    return;
+                }
+            }
         };
         cmd.try_insert_to(
             e,
