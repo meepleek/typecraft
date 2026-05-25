@@ -13,13 +13,13 @@ pub struct Wallie {
     anchor: Coords,
     prev_tile: Coords,
     rot_dir: RotationDirection,
-    backtracking_dir: Option<TileDir>,
+    backtracking_dir: Option<Coords>,
 }
 impl Wallie {
     pub fn bundle(tile: Coords, anchor: Coords, direction: RotationDirection) -> impl Bundle {
         (
             super::Enemy,
-            ObjectCoords(tile),
+            ObjectCoords::new(tile),
             Wallie {
                 // used as a deny list for movement
                 // so using the initial position is fine
@@ -42,7 +42,7 @@ impl Wallie {
 
         fn valid_anchors(
             tile: Coords,
-            dir: TileDir,
+            dir: Coords,
             mut possible_anchor_dirs: [Coords; 4],
             grid: &grid::Grid,
         ) -> Option<Coords> {
@@ -155,7 +155,8 @@ fn wallie_move(
 ) {
     let grid = or_return_quiet!(grid);
     for (mut coords, mut walle) in &mut enemy_q {
-        coords.0 = walle.step(coords.0, &grid);
+        let current_tile = coords.tile();
+        coords.update_tile(walle.step(current_tile, &grid));
     }
 }
 
@@ -179,7 +180,7 @@ mod tests {
         tile: Coords,
         prev_tile: Coords,
         anchor: Coords,
-        backtracking_dir: Option<TileDir>,
+        backtracking_dir: Option<Coords>,
     }
 
     // CW direction
@@ -270,7 +271,7 @@ mod tests {
           prev_tile : Coords::new(3, 2),
           tile: Coords::new(2, 2),
           anchor: Coords::new(2, 3),
-          backtracking_dir: Some(TileDir::new(-1, 0))
+          backtracking_dir: Some(Coords::new(-1, 0))
         } ; "CW: [3, 2] => [2, 2] - exiting btm-right dead-end"
     )]
     #[test_case(
@@ -279,7 +280,7 @@ mod tests {
           prev_tile : Coords::new(3, 2),
           tile: Coords::new(2, 2),
           anchor: Coords::new(2, 3),
-          backtracking_dir: Some(TileDir::new(-1, 0))
+          backtracking_dir: Some(Coords::new(-1, 0))
         },
         WallEStepData {
           prev_tile : Coords::new(2, 2),
@@ -421,7 +422,7 @@ mod tests {
           prev_tile : Coords::new(3, 2),
           tile: Coords::new(2, 2),
           anchor: Coords::new(2, 1),
-          backtracking_dir: Some(TileDir::new(-1, 0))
+          backtracking_dir: Some(Coords::new(-1, 0))
         } ; "CCW: [3, 2] -> [2, 2] - exiting btm-right dead-end"
     )]
     #[test_case(
@@ -430,7 +431,7 @@ mod tests {
           prev_tile : Coords::new(3, 2),
           tile: Coords::new(2, 2),
           anchor: Coords::new(2, 1),
-          backtracking_dir: Some(TileDir::new(-1, 0))
+          backtracking_dir: Some(Coords::new(-1, 0))
         },
         WallEStepData {
           prev_tile : Coords::new(2, 2),
