@@ -208,15 +208,11 @@ impl PopulatedGrid {
                             if anchor.is_none() {
                                 tracing::warn!(t=?*t, "Wallie tile without a nearby anchor");
                             }
-                            anchor.map(|anchor| {
+                            anchor.map(|_anchor| {
                                 b.spawn((
                                     // todo: proper anchor, prev & direction
                                     // possibly pass in a tile + grid instead so it's easier to test
-                                    enemy::wallie::Wallie::bundle(
-                                        *t,
-                                        anchor,
-                                        enemy::wallie::RotationDirection::CounterClockwise,
-                                    ),
+                                    enemy::wallie::Wallie::bundle(*t),
                                     self.spawn_transform(*t),
                                 ))
                                 .id()

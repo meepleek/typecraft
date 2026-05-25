@@ -1,3 +1,5 @@
+use std::ops::Not;
+
 use bevy::{color::palettes::tailwind, time::common_conditions::on_real_timer};
 
 use crate::prelude::*;
@@ -10,23 +12,19 @@ pub(super) fn plugin(app: &mut App) {
 #[derive(Component, Debug, Clone, Copy, PartialEq, Reflect)]
 #[reflect(Component)]
 pub struct Wallie {
-    anchor: Coords,
-    prev_tile: Coords,
     rot_dir: RotationDirection,
-    backtracking_dir: Option<Coords>,
+    tile_edge: TileOrthoDir,
 }
 impl Wallie {
-    pub fn bundle(tile: Coords, anchor: Coords, direction: RotationDirection) -> impl Bundle {
+    pub fn bundle(tile: Coords) -> impl Bundle {
         (
             super::Enemy,
-            ObjectCoords::new(tile),
+            ObjectCoords(tile),
             Wallie {
-                // used as a deny list for movement
-                // so using the initial position is fine
-                prev_tile: tile,
-                anchor,
-                rot_dir: direction,
-                backtracking_dir: None,
+                // todo:
+                rot_dir: RotationDirection::Clockwise,
+                // todo:
+                tile_edge: TileOrthoDir::North,
             },
             Text2d::new(template::TemplateTileKind::ENEMY),
             TextFont::from_font_size(90.),
@@ -35,111 +33,79 @@ impl Wallie {
     }
 
     fn step(&mut self, current_tile: Coords, grid: &grid::Grid) -> Coords {
-        fn is_deadend_anchor(grid: &grid::Grid, tile: Coords, next_tile: Coords) -> bool {
-            grid.unoccupied_targetable_neighbours(tile, tile::TileDirection::All)
-                .all(|utn| utn.tile == next_tile)
-        }
+        use {RotationDirection::*, TileOrthoDir::*};
 
-        fn valid_anchors(
-            tile: Coords,
-            dir: Coords,
-            mut possible_anchor_dirs: [Coords; 4],
-            grid: &grid::Grid,
-        ) -> Option<Coords> {
-            let dir_i = possible_anchor_dirs
-                .iter()
-                .position(|d| *d == dir)
-                .expect("Failed to find index of anchor dir");
-            possible_anchor_dirs.rotate_left(dir_i);
-            tracing::warn!(?dir, ?dir_i, ?possible_anchor_dirs);
-            possible_anchor_dirs
-                .into_iter()
-                .filter_map(|d| {
-                    let anchor_tile = tile + d;
-                    if !grid.is_wall_tile(anchor_tile)
-                    // skip the movement dir, 'cause that's already handled above
-                    || d == dir
-                    || tile.manhattan_distance(anchor_tile) != 1
-                    {
-                        return None;
-                    }
-                    Some(anchor_tile)
-                })
-                .next()
-        }
-
-        let neighbours = grid
-            .unoccupied_targetable_neighbours(current_tile, tile::TileDirection::Orthogonal)
-            // .inspect(|utn| tracing::warn!(t=?utn.tile, "pre-filter"))
-            .filter(|utn| {
-                utn.tile != self.prev_tile && utn.tile.chebyshev_distance(self.anchor) == 1
-            })
-            // .inspect(|utn| tracing::warn!(t=?utn.tile, "post-filter"))
-            .collect::<Vec<_>>();
-
-        // todo: actually this needs to check that there are no neighbours whatsoever without filtering out prev_tile
-        // if neighbours.len() == 0 {
-        //     tracing::warn!(?self, "Wallie can't move");
-        //     // todo: explode or smt?
-        //     return current_tile;
-        // }
-
-        let next_tile = match (neighbours.len(), neighbours.first(), self.backtracking_dir) {
-            (0, None, None) => {
-                self.backtracking_dir = Some(self.prev_tile - current_tile);
-                self.prev_tile
-            }
-            (0, None, Some(backtracking_dir)) => {
-                let next_tile = current_tile + backtracking_dir;
-                tracing::warn!(?neighbours, "backtracking\n");
-                next_tile
-            }
-            (_, Some(next_tile), _) => {
-                // no longer backtracking
-                self.backtracking_dir = None;
-                next_tile.tile
-            }
-            _ => unreachable!(),
+        let (target_dir, wall_dir) = match (self.rot_dir, self.tile_edge) {
+            (Clockwise, North) => (Coords::X, Coords::new(1, -1)),
+            (Clockwise, East) => (Coords::Y, Coords::ONE),
+            (Clockwise, South) => (Coords::NEG_X, Coords::new(-1, 1)),
+            (Clockwise, West) => (Coords::NEG_Y, Coords::NEG_ONE),
+            (CounterClockwise, North) => todo!(),
+            (CounterClockwise, East) => todo!(),
+            (CounterClockwise, South) => todo!(),
+            (CounterClockwise, West) => todo!(),
         };
-
-        self.prev_tile = current_tile;
-        let dir = next_tile - current_tile;
-
-        // update anchor
-        // wall-hit anchor change
-        let maybe_corner_tile = next_tile + dir;
-        if grid.is_wall_tile(maybe_corner_tile)
-            && !is_deadend_anchor(grid, maybe_corner_tile, next_tile)
-        {
-            tracing::warn!("WALL-HIT!");
-            self.anchor = maybe_corner_tile;
-            return next_tile;
+        let target_tile = current_tile + target_dir;
+        let wall_tile = current_tile + wall_dir;
+        let target_tile_valid =
+            grid.is_targetable_tile(target_tile) && !grid.is_occupied_tile(target_tile);
+        let wall_tile_valid = grid.is_wall_tile(wall_tile);
+        match (target_tile_valid, wall_tile_valid) {
+            (true, true) => {
+                // continue to next tile, same edge
+                target_tile
+            }
+            (true, false) => {
+                let prev_edge = self.tile_edge;
+                self.tile_edge = match self.rot_dir {
+                    Clockwise => self.tile_edge.rotate_ccw(),
+                    CounterClockwise => todo!(),
+                };
+                tracing::warn!(edge=?self.tile_edge, dir=?self.tile_edge.direction(), "rotate around corner");
+                // actually this doesn't work as there are ambiguities
+                // e.g. East => North can go to 2 different souths
+                // but maybe that's fine given the previous checks
+                // so this just needs to check the appropriate change
+                // or maybe another check is required to determine when
+                // wallie is going round in the same corner
+                current_tile
+                    + match (prev_edge, self.tile_edge) {
+                        (North, East) => Coords::NEG_ONE,
+                        (East, North) => Coords::ONE,
+                        (South, East) => Coords::new(-1, 1),
+                        (East, South) => Coords::new(1, -1),
+                        (South, West) => Coords::ONE,
+                        (West, South) => Coords::NEG_ONE,
+                        (North, West) => Coords::new(1, -1),
+                        (West, North) => Coords::NEG_ONE,
+                        (North, North)
+                        | (North, South)
+                        | (East, East)
+                        | (East, West)
+                        | (South, South)
+                        | (South, North)
+                        | (West, West)
+                        | (West, East) => unreachable!("Invalid round corner rotation"),
+                    }
+            }
+            (false, _) => {
+                if grid.is_wall_tile(target_tile) {
+                    self.tile_edge = match self.rot_dir {
+                        Clockwise => self.tile_edge.rotate_cw(),
+                        CounterClockwise => todo!(),
+                    };
+                    current_tile
+                }
+                // todo: also check for deadends here or is that handled by the previous branch?
+                else {
+                    // can't continue - turn around
+                    self.rot_dir = !self.rot_dir;
+                    // rerun the whole thing
+                    // todo: add some recursion bool or smt. to prevent stack overflow
+                    self.step(current_tile, grid)
+                }
+            }
         }
-
-        // moving anchor in rotation direction
-        // let turning_around_anchor = next_tile.manhattan_distance(self.anchor) == 1;
-        let mut possible_anchor_dirs = grid::DIRS_ORTHO_CW;
-        let ccw = self.rot_dir == RotationDirection::CounterClockwise;
-        if ccw {
-            possible_anchor_dirs.reverse();
-        }
-
-        let moved_anchor = valid_anchors(next_tile, dir, possible_anchor_dirs, &grid);
-        // .or_else(|| valid_anchors(current_tile, dir, possible_anchor_dirs, &grid));
-
-        // let dir_to_check = if self.backtracking_dir.is_some() && ccw {
-        //     -dir
-        // } else {
-        //     dir
-        // };
-
-        if let Some(moved_anchor) = moved_anchor {
-            tracing::warn!(leaving=?self.backtracking_dir, "============\nmoved anchor tile");
-            self.anchor = moved_anchor;
-            return next_tile;
-        }
-
-        next_tile
     }
 }
 
@@ -148,6 +114,16 @@ pub enum RotationDirection {
     Clockwise,
     CounterClockwise,
 }
+impl Not for RotationDirection {
+    type Output = Self;
+
+    fn not(self) -> Self::Output {
+        match self {
+            RotationDirection::Clockwise => RotationDirection::CounterClockwise,
+            RotationDirection::CounterClockwise => RotationDirection::Clockwise,
+        }
+    }
+}
 
 fn wallie_move(
     grid: Option<Single<&grid::Grid>>,
@@ -155,8 +131,8 @@ fn wallie_move(
 ) {
     let grid = or_return_quiet!(grid);
     for (mut coords, mut walle) in &mut enemy_q {
-        let current_tile = coords.tile();
-        coords.update_tile(walle.step(current_tile, &grid));
+        let tile = walle.step(coords.0, &grid);
+        coords.0 = tile;
     }
 }
 
@@ -178,312 +154,163 @@ mod tests {
     #[derive(Debug, PartialEq)]
     struct WallEStepData {
         tile: Coords,
-        prev_tile: Coords,
-        anchor: Coords,
-        backtracking_dir: Option<Coords>,
+        tile_edge: TileOrthoDir,
     }
 
     // CW direction
     #[test_case(
         RotationDirection::Clockwise,
         WallEStepData {
-          prev_tile : Coords::new(0, 1),
           tile: Coords::new(0, 0),
-          anchor: Coords::new(0, -1),
-          backtracking_dir: None
+          tile_edge: TileOrthoDir::North,
         },
         WallEStepData {
-          prev_tile : Coords::new(0, 0),
-          tile: Coords::new(0, 1),
-          anchor: Coords::new(2, 0),
-          backtracking_dir: Some(Coords::new(0, 1))
-        } ; "CW: [0, 0] => [0, 1] - up-left deadend"
-    )]
-    #[test_case(
-        RotationDirection::Clockwise,
-        WallEStepData {
-          prev_tile : Coords::new(0, 0),
-          tile: Coords::new(0, 1),
-          anchor: Coords::new(2, 0),
-          backtracking_dir: Some(Coords::new(0, 1))
-        },
-        WallEStepData {
-          prev_tile : Coords::new(0, 1),
-          tile: Coords::new(1, 1),
-          anchor: Coords::new(2, 1),
-          backtracking_dir: None
-        } ; "CW: [0, 1] => [1, 1]"
-    )]
-    #[test_case(
-        RotationDirection::Clockwise,
-        WallEStepData {
-          prev_tile : Coords::new(0, 1),
-          tile: Coords::new(1, 1),
-          anchor: Coords::new(2, 1),
-          backtracking_dir: None
-        },
-        WallEStepData {
-          prev_tile : Coords::new(1, 1),
-          tile: Coords::new(1, 2),
-          anchor: Coords::new(1, 3),
-          backtracking_dir: None
-        } ; "CW: [1, 1] => [1, 2]"
-    )]
-    #[test_case(
-        RotationDirection::Clockwise,
-        WallEStepData {
-          prev_tile : Coords::new(1, 1),
-          tile: Coords::new(1, 2),
-          anchor: Coords::new(1, 3),
-          backtracking_dir: None
-        },
-        WallEStepData {
-          prev_tile : Coords::new(1, 2),
-          tile: Coords::new(2, 2),
-          anchor: Coords::new(2, 3),
-          backtracking_dir: None
-        } ; "CW: [1, 2] => [2, 2]"
-    )]
-    #[test_case(
-        RotationDirection::Clockwise,
-        WallEStepData {
-          prev_tile : Coords::new(1, 2),
-          tile: Coords::new(2, 2),
-          anchor: Coords::new(2, 3),
-          backtracking_dir: None
-        },
-        WallEStepData {
-          prev_tile : Coords::new(2, 2),
-          tile: Coords::new(3, 2),
-          anchor: Coords::new(3, 3),
-          backtracking_dir: None
-        } ; "CW: [2, 2] => [3, 2] - btm-right dead-end"
-    )]
-    #[test_case(
-        RotationDirection::Clockwise,
-        WallEStepData {
-          prev_tile : Coords::new(2, 2),
-          tile: Coords::new(3, 2),
-          anchor: Coords::new(3, 3),
-          backtracking_dir: None
-        },
-        WallEStepData {
-          prev_tile : Coords::new(3, 2),
-          tile: Coords::new(2, 2),
-          anchor: Coords::new(2, 3),
-          backtracking_dir: Some(Coords::new(-1, 0))
-        } ; "CW: [3, 2] => [2, 2] - exiting btm-right dead-end"
-    )]
-    #[test_case(
-        RotationDirection::Clockwise,
-        WallEStepData {
-          prev_tile : Coords::new(3, 2),
-          tile: Coords::new(2, 2),
-          anchor: Coords::new(2, 3),
-          backtracking_dir: Some(Coords::new(-1, 0))
-        },
-        WallEStepData {
-          prev_tile : Coords::new(2, 2),
-          tile: Coords::new(1, 2),
-          anchor: Coords::new(1, 3),
-          backtracking_dir: None
-        } ; "CW: [2, 2] => [1, 2] - exit btm-right dead-end"
-    )]
-    #[test_case(
-        RotationDirection::Clockwise,
-        WallEStepData {
-          prev_tile : Coords::new(2, 2),
-          tile: Coords::new(1, 2),
-          anchor: Coords::new(1, 3),
-          backtracking_dir: None
-        },
-        WallEStepData {
-          prev_tile : Coords::new(1, 2),
-          tile: Coords::new(0, 2),
-          anchor: Coords::new(-1, 2),
-          backtracking_dir: None
-        } ; "CW: [1, 2] => [0, 2]"
-    )]
-    #[test_case(
-        RotationDirection::Clockwise,
-        WallEStepData {
-          prev_tile : Coords::new(1, 2),
-          tile: Coords::new(0, 2),
-          anchor: Coords::new(-1, 2),
-          backtracking_dir: None
-        },
-        WallEStepData {
-          prev_tile : Coords::new(0, 2),
-          tile: Coords::new(0, 1),
-          anchor: Coords::new(-1, 1),
-          backtracking_dir: None
-        } ; "CW: [0, 2] => [0, 1]"
-    )]
-    #[test_case(
-        RotationDirection::Clockwise,
-        WallEStepData {
-          prev_tile : Coords::new(0, 2),
-          tile: Coords::new(0, 1),
-          anchor: Coords::new(-1, 1),
-          backtracking_dir: None
-        },
-        WallEStepData {
-          prev_tile : Coords::new(0, 1),
           tile: Coords::new(0, 0),
-          anchor: Coords::new(1, 0),
-          backtracking_dir: None
-        } ; "CW: [0, 1] => [0, 0]"
+          tile_edge: TileOrthoDir::East,
+        } ; "CW: [0, 0] East"
     )]
-    // CCW direction
     #[test_case(
-        RotationDirection::CounterClockwise,
+        RotationDirection::Clockwise,
         WallEStepData {
-          prev_tile : Coords::new(1, 0),
           tile: Coords::new(0, 0),
-          anchor: Coords::new(-1, 0),
-          backtracking_dir: None
+          tile_edge: TileOrthoDir::East,
         },
         WallEStepData {
-          prev_tile : Coords::new(0, 0),
-          tile: Coords::new(0, 1),
-          anchor: Coords::new(-1, 1),
-          backtracking_dir: None
-        } ; "CCW: [0, 0] => [0, 1]"
-    )]
-    #[test_case(
-        RotationDirection::CounterClockwise,
-        WallEStepData {
-          prev_tile : Coords::new(0, 0),
-          tile: Coords::new(0, 1),
-          anchor: Coords::new(-1, 1),
-          backtracking_dir: None
-        },
-        WallEStepData {
-          prev_tile : Coords::new(0, 1),
-          tile: Coords::new(0, 2),
-          anchor: Coords::new(0, 3),
-          backtracking_dir: None
-        } ; "CCW: [0, 1] => [0, 2]"
-    )]
-    #[test_case(
-        RotationDirection::CounterClockwise,
-        WallEStepData {
-          prev_tile : Coords::new(0, 1),
-          tile: Coords::new(0, 2),
-          anchor: Coords::new(0, 3),
-          backtracking_dir: None
-        },
-        WallEStepData {
-          prev_tile : Coords::new(0, 2),
-          tile: Coords::new(1, 2),
-          anchor: Coords::new(1, 3),
-          backtracking_dir: None
-        } ; "CCW: [0, 2] => [1, 2]"
-    )]
-    #[test_case(
-        RotationDirection::CounterClockwise,
-        WallEStepData {
-          prev_tile : Coords::new(0, 2),
-          tile: Coords::new(1, 2),
-          anchor: Coords::new(1, 3),
-          backtracking_dir: None
-        },
-        WallEStepData {
-          prev_tile : Coords::new(1, 2),
-          tile: Coords::new(2, 2),
-          anchor: Coords::new(2, 1),
-          backtracking_dir: None
-        } ; "CCW: [1, 2] => [2, 2]"
-    )]
-    #[test_case(
-        RotationDirection::CounterClockwise,
-        WallEStepData {
-          prev_tile : Coords::new(1, 2),
-          tile: Coords::new(2, 2),
-          anchor: Coords::new(2, 1),
-          backtracking_dir: None
-        },
-        WallEStepData {
-          prev_tile : Coords::new(2, 2),
-          tile: Coords::new(3, 2),
-          anchor: Coords::new(3, 1),
-          backtracking_dir: None
-        } ; "CCW: [2, 2] => [3, 2] - btm-right dead-end"
-    )]
-    #[test_case(
-        RotationDirection::CounterClockwise,
-        WallEStepData {
-          prev_tile : Coords::new(2, 2),
-          tile: Coords::new(3, 2),
-          anchor: Coords::new(3, 1),
-          backtracking_dir: None
-        },
-        WallEStepData {
-          prev_tile : Coords::new(3, 2),
-          tile: Coords::new(2, 2),
-          anchor: Coords::new(2, 1),
-          backtracking_dir: Some(Coords::new(-1, 0))
-        } ; "CCW: [3, 2] -> [2, 2] - exiting btm-right dead-end"
-    )]
-    #[test_case(
-        RotationDirection::CounterClockwise,
-        WallEStepData {
-          prev_tile : Coords::new(3, 2),
-          tile: Coords::new(2, 2),
-          anchor: Coords::new(2, 1),
-          backtracking_dir: Some(Coords::new(-1, 0))
-        },
-        WallEStepData {
-          prev_tile : Coords::new(2, 2),
-          tile: Coords::new(1, 2),
-          anchor: Coords::new(2, 1),
-          backtracking_dir: None
-        } ; "CCW: [2, 2] => [1, 2] - exit btm-right dead-end"
-    )]
-    #[test_case(
-        RotationDirection::CounterClockwise,
-        WallEStepData {
-          prev_tile : Coords::new(2, 2),
-          tile: Coords::new(1, 2),
-          anchor: Coords::new(2, 1),
-          backtracking_dir: None
-        },
-        WallEStepData {
-          prev_tile : Coords::new(1, 2),
           tile: Coords::new(1, 1),
-          anchor: Coords::new(1, 0),
-          backtracking_dir: None
-        } ; "CCW: [1, 2] => [1, 1]"
+          tile_edge: TileOrthoDir::North,
+        } ; "CW: [1, 1] South"
     )]
     #[test_case(
-        RotationDirection::CounterClockwise,
+        RotationDirection::Clockwise,
         WallEStepData {
-          prev_tile : Coords::new(1, 2),
           tile: Coords::new(1, 1),
-          anchor: Coords::new(1, 0),
-          backtracking_dir: None
+          tile_edge: TileOrthoDir::North,
         },
         WallEStepData {
-          prev_tile : Coords::new(1, 1),
-          tile: Coords::new(0, 1),
-          anchor: Coords::new(-1, 1),
-          backtracking_dir: None
-        } ; "CCW: [1, 1] => [0, 1]"
+          tile: Coords::new(1, 1),
+          tile_edge: TileOrthoDir::East,
+        } ; "CW: [1, 1] East"
     )]
     #[test_case(
-        RotationDirection::CounterClockwise,
+        RotationDirection::Clockwise,
         WallEStepData {
-          prev_tile : Coords::new(1, 1),
-          tile: Coords::new(0, 1),
-          anchor: Coords::new(-1, 1),
-          backtracking_dir: None
+          tile: Coords::new(1, 1),
+          tile_edge: TileOrthoDir::East,
         },
         WallEStepData {
-          prev_tile : Coords::new(0, 1),
+          tile: Coords::new(2, 2),
+          tile_edge: TileOrthoDir::North,
+        } ; "CW: [2, 2] North"
+    )]
+    #[test_case(
+        RotationDirection::Clockwise,
+        WallEStepData {
+          tile: Coords::new(2, 2),
+          tile_edge: TileOrthoDir::North,
+        },
+        WallEStepData {
+          tile: Coords::new(3, 2),
+          tile_edge: TileOrthoDir::North,
+        } ; "CW: [3, 2] North"
+    )]
+    #[test_case(
+        RotationDirection::Clockwise,
+        WallEStepData {
+          tile: Coords::new(3, 2),
+          tile_edge: TileOrthoDir::North,
+        },
+        WallEStepData {
+          tile: Coords::new(3, 2),
+          tile_edge: TileOrthoDir::East,
+        } ; "CW: [3, 2] East"
+    )]
+    #[test_case(
+        RotationDirection::Clockwise,
+        WallEStepData {
+          tile: Coords::new(3, 2),
+          tile_edge: TileOrthoDir::East,
+        },
+        WallEStepData {
+          tile: Coords::new(3, 2),
+          tile_edge: TileOrthoDir::South,
+        } ; "CW: [3, 2] South"
+    )]
+    #[test_case(
+        RotationDirection::Clockwise,
+        WallEStepData {
+          tile: Coords::new(3, 2),
+          tile_edge: TileOrthoDir::South,
+        },
+        WallEStepData {
+          tile: Coords::new(2, 2),
+          tile_edge: TileOrthoDir::South,
+        } ; "CW: [2, 2] South"
+    )]
+    #[test_case(
+        RotationDirection::Clockwise,
+        WallEStepData {
+          tile: Coords::new(2, 2),
+          tile_edge: TileOrthoDir::South,
+        },
+        WallEStepData {
+          tile: Coords::new(1, 2),
+          tile_edge: TileOrthoDir::South,
+        } ; "CW: [1, 2] South"
+    )]
+    #[test_case(
+        RotationDirection::Clockwise,
+        WallEStepData {
+          tile: Coords::new(1, 2),
+          tile_edge: TileOrthoDir::South,
+        },
+        WallEStepData {
+          tile: Coords::new(0, 2),
+          tile_edge: TileOrthoDir::South,
+        } ; "CW: [0, 2] South"
+    )]
+    #[test_case(
+        RotationDirection::Clockwise,
+        WallEStepData {
+          tile: Coords::new(0, 2),
+          tile_edge: TileOrthoDir::South,
+        },
+        WallEStepData {
+          tile: Coords::new(0, 2),
+          tile_edge: TileOrthoDir::West,
+        } ; "CW: [0, 2] West"
+    )]
+    #[test_case(
+        RotationDirection::Clockwise,
+        WallEStepData {
+          tile: Coords::new(0, 2),
+          tile_edge: TileOrthoDir::West,
+        },
+        WallEStepData {
+          tile: Coords::new(0, 1),
+          tile_edge: TileOrthoDir::West,
+        } ; "CW: [0, 1] West"
+    )]
+    #[test_case(
+        RotationDirection::Clockwise,
+        WallEStepData {
+          tile: Coords::new(0, 1),
+          tile_edge: TileOrthoDir::West,
+        },
+        WallEStepData {
           tile: Coords::new(0, 0),
-          anchor: Coords::new(-1, 0),
-          backtracking_dir: None
-        } ; "CCW: [0, 1] => [0, 0]"
+          tile_edge: TileOrthoDir::West,
+        } ; "CW: [0, 0] West"
+    )]
+    #[test_case(
+        RotationDirection::Clockwise,
+        WallEStepData {
+          tile: Coords::new(0, 0),
+          tile_edge: TileOrthoDir::West,
+        },
+        WallEStepData {
+          tile: Coords::new(0, 0),
+          tile_edge: TileOrthoDir::North,
+        } ; "CW: [0, 0] North"
     )]
     #[traced_test]
     fn step(rot_dir: RotationDirection, initial_state: WallEStepData, expected: WallEStepData) {
@@ -499,44 +326,44 @@ mod tests {
         .expect("Failed to place enemy");
         let mut wallie = Wallie {
             rot_dir,
-            anchor: initial_state.anchor,
-            prev_tile: initial_state.prev_tile,
-            backtracking_dir: initial_state.backtracking_dir,
+            tile_edge: initial_state.tile_edge,
         };
         // tracing::warn!(?wallie);
 
-        let next_tile = wallie.step(initial_state.tile.into(), &grid);
+        let next_tile = wallie.step(initial_state.tile, &grid);
         let actual = WallEStepData {
             tile: next_tile,
-            prev_tile: wallie.prev_tile,
-            anchor: wallie.anchor,
-            backtracking_dir: wallie.backtracking_dir,
+            tile_edge: wallie.tile_edge,
         };
 
         grid.print_ascii_debug_map(
             false,
-            Some(move |t| {
-                if t == actual.tile {
-                    Some(('*', DebugGridTileColor::Red))
-                } else if t == actual.prev_tile {
-                    let dir = actual.tile - actual.prev_tile;
-                    Some((
-                        match (dir.x, dir.y) {
-                            (0, -1) => '🢁',
-                            (1, 0) => '🢂',
-                            (0, 1) => '🢃',
-                            (-1, 0) => '🡸',
-                            _ => unreachable!(),
-                        },
-                        DebugGridTileColor::White,
-                    ))
-                } else if t == expected.anchor {
-                    Some(('⨯', DebugGridTileColor::Red))
-                } else if t == actual.anchor {
-                    Some(('⨯', DebugGridTileColor::Green))
-                } else {
-                    None
-                }
+            Some(move |_t| {
+                None
+                // if t == actual.tile {
+                //     Some(('*', DebugGridTileColor::Red))
+                // }
+                // // else if t == actual.prev_tile {
+                // //     let dir = actual.tile - actual.prev_tile;
+                // //     Some((
+                // //         match (dir.x, dir.y) {
+                // //             (0, -1) => '🢁',
+                // //             (1, 0) => '🢂',
+                // //             (0, 1) => '🢃',
+                // //             (-1, 0) => '🡸',
+                // //             _ => unreachable!(),
+                // //         },
+                // //         DebugGridTileColor::White,
+                // //     ))
+                // // }
+                // // else if t == expected.anchor {
+                // //     Some(('⨯', DebugGridTileColor::Red))
+                // // } else if t == actual.anchor {
+                // //     Some(('⨯', DebugGridTileColor::Green))
+                // // }
+                // else {
+                //     None
+                // }
             }),
         );
 
