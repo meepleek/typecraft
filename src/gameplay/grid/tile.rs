@@ -35,42 +35,8 @@ pub const TILE_ALPHA_INACTIVE: f32 = 0.15;
 pub const TILE_ALPHA_TARGETABLE: f32 = 1.0;
 pub const TILE_ALPHA_HIDDEN: f32 = 0.0;
 
-#[derive(Component, Debug, Clone, PartialEq)]
-pub struct ObjectCoords {
-    tile: Coords,
-    prev_tile: Option<Coords>,
-}
-impl ObjectCoords {
-    pub fn new(tile: Coords) -> Self {
-        Self {
-            tile,
-            prev_tile: None,
-        }
-    }
-
-    pub fn with_prev(mut self, prev: Coords) -> Self {
-        self.prev_tile = Some(prev);
-        self
-    }
-
-    pub fn tile(&self) -> Coords {
-        self.tile
-    }
-
-    pub fn prev_tile(&self) -> Option<Coords> {
-        self.prev_tile
-    }
-
-    /// Update tile & prev_tile
-    /// # Returns
-    /// Previous tile
-    pub fn update_tile(&mut self, tile: Coords) -> (Coords, Coords) {
-        let prev = self.tile;
-        self.prev_tile = Some(prev);
-        self.tile = tile;
-        (prev, tile)
-    }
-}
+#[derive(Component, Debug, Clone, PartialEq, Deref, DerefMut)]
+pub struct ObjectCoords(pub Coords);
 
 #[derive(Component, Debug, Clone, PartialEq, Deref, DerefMut)]
 pub struct GridTileCoords(pub Coords);
@@ -394,7 +360,7 @@ fn move_tile_object(
 ) {
     let mut grid = or_return_quiet!(grid);
     for (e, tc, is_player) in tile_q {
-        let tile = tc.tile();
+        let tile = tc.0;
         let prev_tile = or_continue!(grid.entity_to_coords(e));
         // also need to fade in/out the from/to move chars
         let world_pos = or_return!(grid.tile_to_world(tile));
