@@ -195,28 +195,16 @@ impl PopulatedGrid {
                 if let Some(kind) = self.occupied_tiles.get(&*t) {
                     let entity = match kind {
                         TileObjectKind::Enemy => {
-                            // todo: also check for permawalls
-                            let anchor = self.occupied_tiles.iter().find_map(|(tile, kind)| {
-                                if tile.manhattan_distance(*t) == 1
-                                    && matches!(kind, TileObjectKind::Wall(_))
-                                {
-                                    Some(*tile)
-                                } else {
+                            let wallie = enemy::wallie::Wallie::bundle(*t, &grid, rng);
+                            match wallie {
+                                Some(wallie) => {
+                                    Some(b.spawn((wallie, self.spawn_transform(*t))).id())
+                                }
+                                None => {
+                                    tracing::warn!(t=?*t, "Failed to spawn Wallie");
                                     None
                                 }
-                            });
-                            if anchor.is_none() {
-                                tracing::warn!(t=?*t, "Wallie tile without a nearby anchor");
                             }
-                            anchor.map(|_anchor| {
-                                b.spawn((
-                                    // todo: proper anchor, prev & direction
-                                    // possibly pass in a tile + grid instead so it's easier to test
-                                    enemy::wallie::Wallie::bundle(*t),
-                                    self.spawn_transform(*t),
-                                ))
-                                .id()
-                            })
                         }
                         TileObjectKind::Wall(typable_words) => Some(
                             b.spawn((

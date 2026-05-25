@@ -1,8 +1,6 @@
-use std::ops::Not;
-
-use bevy::{color::palettes::tailwind, time::common_conditions::on_real_timer};
-
 use crate::prelude::*;
+use bevy::{color::palettes::tailwind, time::common_conditions::on_real_timer};
+use std::ops::Not;
 
 pub(super) fn plugin(app: &mut App) {
     // app.add_systems(Update, wallie_move.run_if(on_real_timer(ms(1500))));
@@ -16,20 +14,35 @@ pub struct Wallie {
     tile_edge: TileOrthoDir,
 }
 impl Wallie {
-    pub fn bundle(tile: Coords) -> impl Bundle {
-        (
+    pub fn new(tile_edge: TileOrthoDir, rot_dir: RotationDirection) -> Self {
+        Wallie { rot_dir, tile_edge }
+    }
+
+    pub fn from_origin_tile(grid: &grid::Grid, tile: Coords, rng: &mut impl Rng) -> Option<Self> {
+        let dir = grid::DIRS_ORTHO_CW
+            .into_iter()
+            .filter(|dir| grid.is_wall_tile(tile + dir))
+            .choose(rng);
+        dir.and_then(TileOrthoDir::from_direction).map(|edge| {
+            let rot_dir = if rng.random::<bool>() {
+                RotationDirection::Clockwise
+            } else {
+                RotationDirection::CounterClockwise
+            };
+            Self::new(edge, rot_dir)
+        })
+    }
+
+    pub fn bundle(tile: Coords, grid: &grid::Grid, rng: &mut impl Rng) -> Option<impl Bundle> {
+        let wallie = Self::from_origin_tile(grid, tile, rng)?;
+        Some((
             super::Enemy,
             ObjectCoords(tile),
-            Wallie {
-                // todo:
-                rot_dir: RotationDirection::Clockwise,
-                // todo:
-                tile_edge: TileOrthoDir::North,
-            },
+            wallie,
             Text2d::new(template::TemplateTileKind::ENEMY),
             TextFont::from_font_size(90.),
             TextColor(tailwind::RED_400.with_alpha(1.).into()),
-        )
+        ))
     }
 
     fn step(&mut self, current_tile: Coords, grid: &grid::Grid) -> Coords {

@@ -188,7 +188,7 @@ impl Grid {
         tile: Coords,
         move_dir: TileDirection,
     ) -> impl Iterator<Item = TargetableNeighbour> {
-        self.neighbours(tile, move_dir).filter_map(move |t| {
+        self.neighbours(tile, move_dir, true).filter_map(move |t| {
             self.targetable_tiles.get(&t).map(|tt| TargetableNeighbour {
                 tile: t,
                 targetable: tt.clone(),
@@ -220,11 +220,12 @@ impl Grid {
         &self,
         tile: Coords,
         move_dir: TileDirection,
+        check_bounds: bool,
     ) -> impl Iterator<Item = Coords> {
         let dirs = Self::neighbour_dirs(move_dir);
         dirs.iter().copied().filter_map(move |dir| {
             let target = tile + dir;
-            self.within_bounds(target).then(|| target)
+            (!check_bounds || self.within_bounds(target)).then(|| target)
         })
     }
 
