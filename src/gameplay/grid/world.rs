@@ -91,6 +91,19 @@ mod tests {
         }
     }
 
+    #[test_case((0, 0) => true)]
+    #[test_case((0, 2) => true)]
+    #[test_case((2, 2) => true)]
+    #[test_case((1, 1) => true)]
+    #[test_case((3, 0) => false)]
+    #[test_case((0, 3) => false)]
+    #[test_case((-1, 0) => false)]
+    #[test_case((0, -1) => false)]
+    #[traced_test]
+    fn within_bounds(tile: (i16, i16)) -> bool {
+        TestGrid.within_bounds(tile.into())
+    }
+
     #[test_case(0., 0. => Some(Coords::ONE))]
     #[test_case(TILE_SIZE_F32 * 0.4, TILE_SIZE_F32 * -0.4 => Some(Coords::ONE))]
     #[test_case(TILE_SIZE_F32 * 0.6, TILE_SIZE_F32 * -0.6 => Some(Coords::new(2, 2)))]

@@ -36,18 +36,21 @@ pub enum AddTileError {
 pub enum PlaceError {
     Taken,
     OutOfBounds,
+    NotTargetable,
 }
 
 #[derive(Debug, PartialEq, Eq, derive_more::Error, derive_more::Display)]
 pub enum MoveError {
     Taken,
     OutOfBounds,
+    NotTargetable,
     EntityLookupFailed,
 }
 impl From<PlaceError> for MoveError {
     fn from(place_err: PlaceError) -> Self {
         match place_err {
             PlaceError::Taken => Self::Taken,
+            PlaceError::NotTargetable => Self::NotTargetable,
             PlaceError::OutOfBounds => Self::OutOfBounds,
         }
     }
@@ -118,6 +121,8 @@ impl Grid {
     pub fn can_place_at(&self, tile: Coords) -> Result<(), PlaceError> {
         if !self.within_bounds(tile) {
             return Err(PlaceError::OutOfBounds);
+        } else if !self.is_targetable_tile(tile) {
+            return Err(PlaceError::NotTargetable);
         } else if self.is_occupied_tile(tile) {
             return Err(PlaceError::Taken);
         }
@@ -427,29 +432,35 @@ impl GridSize for Grid {
 #[cfg(test)]
 mod tests {
     use test_case::test_case;
-    use tracing_test::traced_test;
 
     use super::*;
+
+    const TEST_LVL_5X3: &'static str = "
+    .....
+    .*@G.
+    .....
+    ";
 
     const TEST_TILE_SIZE: u16 = 96;
     const TILE_SIZE_F32: f32 = TEST_TILE_SIZE as f32;
 
-    #[test_case(3, 3 => matches Ok(_))]
-    #[test_case(4, 6 => matches Ok(_))]
-    #[test_case(0, 0 => matches Err(PlaceError::Taken))]
-    #[test_case(6, 0 => matches Err(PlaceError::OutOfBounds))]
-    #[test_case(0, 9 => matches Err(PlaceError::OutOfBounds))]
+    #[test_case(1, 2 => matches Ok(_))]
+    #[test_case(4, 2 => matches Ok(_))]
+    #[test_case(2, 1 => matches Err(PlaceError::Taken))]
+    #[test_case(1, 1 => matches Err(PlaceError::Taken))]
+    #[test_case(5, 0 => matches Err(PlaceError::OutOfBounds))]
+    #[test_case(0, 3 => matches Err(PlaceError::OutOfBounds))]
     #[test_case(50, 0 => matches Err(PlaceError::OutOfBounds))]
     #[test_case(0, 50 => matches Err(PlaceError::OutOfBounds))]
     fn can_place_at_coords(x: i16, y: i16) -> Result<(), PlaceError> {
-        let board = test_grid((6, 9));
+        let board = test_grid();
         board.can_place_at((x, y).into())
     }
 
     #[test]
     fn cannot_place_at_coords_when_taken() {
-        let coords: Coords = (3, 3).into();
-        let mut board = test_grid((6, 6));
+        let coords: Coords = (0, 0).into();
+        let mut board = test_grid();
         board
             .place_object(
                 TileObject {
@@ -463,30 +474,9 @@ mod tests {
         assert_eq!(board.can_place_at(coords), Err(PlaceError::Taken));
     }
 
-    #[test_case(3, (0, 0) => true)]
-    #[test_case(3, (0, 2) => true)]
-    #[test_case(3, (2, 2) => true)]
-    #[test_case(3, (1, 1) => true)]
-    #[test_case(3, (3, 0) => false)]
-    #[test_case(3, (0, 3) => false)]
-    #[test_case(3, (-1, 0) => false)]
-    #[test_case(3, (0, -1) => false)]
-    #[traced_test]
-    fn within_bounds(size: u16, tile: (i16, i16)) -> bool {
-        let board = test_grid(U16Vec2::splat(size));
-        board.within_bounds(tile.into())
-    }
-
     const PLAYER_TILE: (i16, i16) = (4, 2);
 
-    fn test_grid(grid_size: impl Into<U16Vec2>) -> Grid {
-        Grid::new(
-            grid_size,
-            TEST_TILE_SIZE,
-            PlayerGridState {
-                tile: Coords::ZERO,
-                entity: Entity::PLACEHOLDER,
-            },
-        )
+    fn test_grid() -> Grid {
+        TestGrid::from_str(TEST_LVL_5X3)
     }
 }
