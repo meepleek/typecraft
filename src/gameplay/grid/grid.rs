@@ -111,6 +111,10 @@ impl Grid {
         self.occupied_tiles.contains_key(&tile) || self.player_tile() == tile
     }
 
+    pub fn is_targetable_tile(&self, tile: Coords) -> bool {
+        self.targetable_tiles.contains_key(&tile)
+    }
+
     pub fn can_place_at(&self, tile: Coords) -> Result<(), PlaceError> {
         if !self.within_bounds(tile) {
             return Err(PlaceError::OutOfBounds);
