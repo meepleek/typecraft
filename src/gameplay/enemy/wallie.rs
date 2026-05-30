@@ -10,12 +10,15 @@ pub(super) fn plugin(app: &mut App) {
 #[derive(Component, Debug, Clone, Copy, PartialEq, Reflect)]
 #[reflect(Component)]
 pub struct Wallie {
-    rot_dir: WallOrientation,
+    orientation: WallOrientation,
     tile_edge: TileOrthoDir,
 }
 impl Wallie {
-    pub fn new(tile_edge: TileOrthoDir, rot_dir: WallOrientation) -> Self {
-        Wallie { rot_dir, tile_edge }
+    pub fn new(tile_edge: TileOrthoDir, orientation: WallOrientation) -> Self {
+        Wallie {
+            orientation,
+            tile_edge,
+        }
     }
 
     pub fn from_origin_tile(grid: &grid::Grid, tile: Coords, rng: &mut impl Rng) -> Option<Self> {
@@ -25,12 +28,12 @@ impl Wallie {
             .filter(|dir| grid.is_wall_tile(tile + dir))
             .choose(rng);
         dir.and_then(TileOrthoDir::from_direction).map(|edge| {
-            let rot_dir = if rng.random::<bool>() {
+            let orientation = if rng.random::<bool>() {
                 WallOrientation::LeftHandSide
             } else {
                 WallOrientation::RightHandSide
             };
-            Self::new(edge, rot_dir)
+            Self::new(edge, orientation)
         })
     }
 
@@ -55,7 +58,7 @@ impl Wallie {
             grid: &grid::Grid,
             has_flipped: bool,
         ) -> Coords {
-            let (target_dir, wall_dir) = match (wallie.rot_dir, wallie.tile_edge) {
+            let (target_dir, wall_dir) = match (wallie.orientation, wallie.tile_edge) {
                 (LeftHandSide, North) => (Coords::X, Coords::new(1, -1)),
                 (LeftHandSide, East) => (Coords::Y, Coords::ONE),
                 (LeftHandSide, South) => (Coords::NEG_X, Coords::new(-1, 1)),
@@ -77,19 +80,14 @@ impl Wallie {
                 }
                 (true, false) => {
                     let prev_edge = wallie.tile_edge;
-                    wallie.tile_edge = match wallie.rot_dir {
+                    wallie.tile_edge = match wallie.orientation {
                         LeftHandSide => wallie.tile_edge.rotate_ccw(),
                         RightHandSide => wallie.tile_edge.rotate_cw(),
                     };
-                    // tracing::warn!(?target_tile, ?wall_tile, ?prev_edge, edge=?wallie.tile_edge, "turning around");
-                    // actually this doesn't work as there are ambiguities
-                    // e.g. East => North can go to 2 different souths
-                    // but maybe that's fine given the previous checks
-                    // so this just needs to check the appropriate change
-                    // or maybe another check is required to determine when
-                    // wallie is going round in the same corner
-                    current_tile
-                        + match (prev_edge, wallie.tile_edge) {
+                    tracing::debug!(?target_tile, ?wall_tile, ?prev_edge, edge=?wallie.tile_edge, "turning around");
+                    current_tile +
+                        // don't need to match on wall orientation 'cause each pair is only valid for one orientation & not reachable for the other
+                       match (prev_edge, wallie.tile_edge) {
                             (North, East) => Coords::NEG_ONE,
                             (East, North) => Coords::ONE,
                             (South, East) => Coords::new(-1, 1),
@@ -97,7 +95,7 @@ impl Wallie {
                             (South, West) => Coords::ONE,
                             (West, South) => Coords::NEG_ONE,
                             (North, West) => Coords::new(1, -1),
-                            (West, North) => Coords::NEG_ONE,
+                            (West, North) => Coords::new(-1, 1),
                             (North, North)
                             | (North, South)
                             | (East, East)
@@ -110,7 +108,7 @@ impl Wallie {
                 }
                 (false, _) => {
                     if grid.is_wall_tile(target_tile) {
-                        wallie.tile_edge = match wallie.rot_dir {
+                        wallie.tile_edge = match wallie.orientation {
                             LeftHandSide => wallie.tile_edge.rotate_cw(),
                             RightHandSide => wallie.tile_edge.rotate_ccw(),
                         };
@@ -119,7 +117,7 @@ impl Wallie {
                     // todo: also check for dead-ends here or is that handled by the previous branch?
                     else if !has_flipped {
                         // can't continue - turn around
-                        wallie.rot_dir = !wallie.rot_dir;
+                        wallie.orientation = !wallie.orientation;
                         // rerun the whole thing
                         step_impl(wallie, current_tile, grid, true)
                     } else {
@@ -187,25 +185,25 @@ mod tests {
     #[test_case(
         Coords::ZERO,
         Some(Wallie {
-            rot_dir: LeftHandSide,
+            orientation: LeftHandSide,
             tile_edge:TileOrthoDir::West
         }))]
     #[test_case(
         Coords::X,
         Some(Wallie {
-            rot_dir: LeftHandSide,
+            orientation: LeftHandSide,
             tile_edge:TileOrthoDir::East
         }))]
     #[test_case(
         Coords::new(0, 2),
         Some(Wallie {
-            rot_dir: RightHandSide,
+            orientation: RightHandSide,
             tile_edge:TileOrthoDir::West
         }))]
     #[test_case(
         Coords::new(2, 2),
         Some(Wallie {
-            rot_dir: RightHandSide,
+            orientation: RightHandSide,
             tile_edge:TileOrthoDir::East
         }))]
     #[test_case(Coords::new(2, 0), None)]
@@ -309,7 +307,7 @@ mod tests {
             ((0, 1), East),
             ((1, 0), South),
             ((2, 1), West),
-        ] ; "single center tile - RightHandSide"
+        ] ; "single pivot tile - RightHandSide"
     )]
     #[test_case(
         "
@@ -325,10 +323,40 @@ mod tests {
             ((0, 1), East),
             ((1, 2), North),
             ((2, 1), West),
-        ] ; "single center tile - LeftHandSide"
+        ] ; "single pivot tile - LeftHandSide"
+    )]
+    #[test_case(
+        "
+        .#
+        ##
+        @G
+        ",
+        LeftHandSide,
+        vec![
+            ((0, 0), North),
+            ((0, 0), East),
+            ((0, 0), South),
+            ((0, 0), West),
+            ((0, 0), North),
+        ] ; "single tile - LeftHandSide"
+    )]
+    #[test_case(
+        "
+        .#
+        ##
+        @G
+        ",
+        RightHandSide,
+        vec![
+            ((0, 0), North),
+            ((0, 0), West),
+            ((0, 0), South),
+            ((0, 0), East),
+            ((0, 0), North),
+        ] ; "single tile - RightHandSide"
     )]
     #[traced_test]
-    fn step(lvl: &str, rot_dir: WallOrientation, steps: Vec<((i16, i16), TileOrthoDir)>) {
+    fn step(lvl: &str, orientation: WallOrientation, steps: Vec<((i16, i16), TileOrthoDir)>) {
         if steps.len() < 2 {
             panic!("There should be at least 2 steps, otherwise the testcase wouldn't do anything")
         }
@@ -345,7 +373,7 @@ mod tests {
         )
         .expect("Failed to place enemy");
         let mut wallie = Wallie {
-            rot_dir,
+            orientation,
             tile_edge: *initial_tile_edge,
         };
 
