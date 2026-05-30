@@ -165,10 +165,12 @@ impl Not for RotationDirection {
 
 #[cfg(test)]
 mod tests {
+    use itertools::Itertools;
     use test_case::test_case;
     use tracing_test::traced_test;
 
     use super::*;
+    use TileOrthoDir::*;
 
     const TEST_CTOR_LVL: &'static str = "
     ..#
@@ -214,12 +216,6 @@ mod tests {
         pretty_assertions::assert_eq!(expected, actual);
     }
 
-    #[derive(Debug, PartialEq)]
-    struct WallEStepData {
-        tile: Coords,
-        tile_edge: TileOrthoDir,
-    }
-
     const TEST_STEP_LVL: &'static str = "
     .WWW
     ..WW
@@ -239,560 +235,111 @@ mod tests {
     ..@G
     ";
 
-    // corner regression
     #[test_case(
-        TEST_STEP_CORNER_LVL,
+        TEST_STEP_LVL,
         RotationDirection::Clockwise,
-        WallEStepData {
-          tile: Coords::new(1, 1),
-          tile_edge: TileOrthoDir::East,
-        },
-        WallEStepData {
-          tile: Coords::new(1, 2),
-          tile_edge: TileOrthoDir::East,
-        } ; "corner: [1, 2] East"
+        vec![
+            ((0, 0), East),
+            ((1, 1), North),
+            ((1, 1), East),
+            ((2, 2), North),
+            ((3, 2), North),
+            ((3, 2), East),
+            ((3, 3), East),
+            ((3, 3), South),
+            ((3, 3), West),
+            ((2, 2), South),
+            ((1, 2), South),
+            ((0, 2), South),
+            ((0, 2), West),
+            ((0, 1), West),
+            ((0, 0), West),
+            ((0, 0), North),
+        ] ; "Clockwise"
     )]
     #[test_case(
-        TEST_STEP_CORNER_LVL,
-        RotationDirection::Clockwise,
-        WallEStepData {
-          tile: Coords::new(1, 2),
-          tile_edge: TileOrthoDir::East,
-        },
-        WallEStepData {
-          tile: Coords::new(1, 2),
-          tile_edge: TileOrthoDir::South,
-        } ; "corner: [1, 2] South"
-    )]
-    #[test_case(
-        TEST_STEP_CORNER_LVL,
-        RotationDirection::Clockwise,
-        WallEStepData {
-          tile: Coords::new(1, 2),
-          tile_edge: TileOrthoDir::South,
-        },
-        WallEStepData {
-          tile: Coords::new(0, 3),
-          tile_edge: TileOrthoDir::East,
-        } ; "corner: [0, 3] East"
-    )]
-    #[test_case(
-        TEST_STEP_CORNER_LVL,
-        RotationDirection::Clockwise,
-        WallEStepData {
-          tile: Coords::new(0, 3),
-          tile_edge: TileOrthoDir::East,
-        },
-        WallEStepData {
-          tile: Coords::new(1, 4),
-          tile_edge: TileOrthoDir::North,
-        } ; "corner: [1, 4] North"
+        TEST_STEP_LVL,
+        RotationDirection::CounterClockwise,
+        vec![
+            ((0, 0), West),
+            ((0, 1), West),
+            ((0, 2), West),
+            ((0, 2), South),
+            ((1, 2), South),
+            ((2, 2), South),
+            ((3, 3), West),
+            ((3, 3), South),
+            ((3, 3), East),
+            ((3, 2), East),
+            ((3, 2), North),
+            ((2, 2), North),
+            ((1, 1), East),
+            ((1, 1), North),
+            ((0, 0), East),
+            ((0, 0), North),
+        ] ; "CounterClockwise"
     )]
     #[test_case(
         TEST_STEP_CORNER_LVL,
         RotationDirection::Clockwise,
-        WallEStepData {
-          tile: Coords::new(1, 4),
-          tile_edge: TileOrthoDir::North,
-        },
-        WallEStepData {
-          tile: Coords::new(2, 3),
-          tile_edge: TileOrthoDir::West,
-        } ; "corner: [2, 3] West"
-    )]
-    #[test_case(
-        TEST_STEP_CORNER_LVL,
-        RotationDirection::Clockwise,
-        WallEStepData {
-          tile: Coords::new(2, 3),
-          tile_edge: TileOrthoDir::West,
-        },
-        WallEStepData {
-          tile: Coords::new(2, 3),
-          tile_edge: TileOrthoDir::North,
-        } ; "corner: [2, 3] North"
-    )]
-    #[test_case(
-        TEST_STEP_CORNER_LVL,
-        RotationDirection::Clockwise,
-        WallEStepData {
-          tile: Coords::new(2, 3),
-          tile_edge: TileOrthoDir::North,
-        },
-        WallEStepData {
-          tile: Coords::new(3, 3),
-          tile_edge: TileOrthoDir::North,
-        } ; "corner: [3, 3] North"
-    )]
-    #[test_case(
-        TEST_STEP_CORNER_LVL,
-        RotationDirection::Clockwise,
-        WallEStepData {
-          tile: Coords::new(3, 3),
-          tile_edge: TileOrthoDir::North,
-        },
-        WallEStepData {
-          tile: Coords::new(3, 3),
-          tile_edge: TileOrthoDir::East,
-        } ; "corner: [3, 3] East"
-    )]
-    #[test_case(
-        TEST_STEP_CORNER_LVL,
-        RotationDirection::Clockwise,
-        WallEStepData {
-          tile: Coords::new(3, 3),
-          tile_edge: TileOrthoDir::East,
-        },
-        WallEStepData {
-          tile: Coords::new(3, 4),
-          tile_edge: TileOrthoDir::East,
-        } ; "corner: [3, 4] East"
-    )]
-    // CW direction
-    #[test_case(
-        TEST_STEP_LVL,
-        RotationDirection::Clockwise,
-        WallEStepData {
-          tile: Coords::new(0, 0),
-          tile_edge: TileOrthoDir::North,
-        },
-        WallEStepData {
-          tile: Coords::new(0, 0),
-          tile_edge: TileOrthoDir::East,
-        } ; "CW: [0, 0] East"
-    )]
-    #[test_case(
-        TEST_STEP_LVL,
-        RotationDirection::Clockwise,
-        WallEStepData {
-          tile: Coords::new(0, 0),
-          tile_edge: TileOrthoDir::East,
-        },
-        WallEStepData {
-          tile: Coords::new(1, 1),
-          tile_edge: TileOrthoDir::North,
-        } ; "CW: [1, 1] South"
-    )]
-    #[test_case(
-        TEST_STEP_LVL,
-        RotationDirection::Clockwise,
-        WallEStepData {
-          tile: Coords::new(1, 1),
-          tile_edge: TileOrthoDir::North,
-        },
-        WallEStepData {
-          tile: Coords::new(1, 1),
-          tile_edge: TileOrthoDir::East,
-        } ; "CW: [1, 1] East"
-    )]
-    #[test_case(
-        TEST_STEP_LVL,
-        RotationDirection::Clockwise,
-        WallEStepData {
-          tile: Coords::new(1, 1),
-          tile_edge: TileOrthoDir::East,
-        },
-        WallEStepData {
-          tile: Coords::new(2, 2),
-          tile_edge: TileOrthoDir::North,
-        } ; "CW: [2, 2] North"
-    )]
-    #[test_case(
-        TEST_STEP_LVL,
-        RotationDirection::Clockwise,
-        WallEStepData {
-          tile: Coords::new(2, 2),
-          tile_edge: TileOrthoDir::North,
-        },
-        WallEStepData {
-          tile: Coords::new(3, 2),
-          tile_edge: TileOrthoDir::North,
-        } ; "CW: [3, 2] North"
-    )]
-    #[test_case(
-        TEST_STEP_LVL,
-        RotationDirection::Clockwise,
-        WallEStepData {
-          tile: Coords::new(3, 2),
-          tile_edge: TileOrthoDir::North,
-        },
-        WallEStepData {
-          tile: Coords::new(3, 2),
-          tile_edge: TileOrthoDir::East,
-        } ; "CW: [3, 2] East"
-    )]
-    #[test_case(
-        TEST_STEP_LVL,
-        RotationDirection::Clockwise,
-        WallEStepData {
-          tile: Coords::new(3, 2),
-          tile_edge: TileOrthoDir::East,
-        },
-        WallEStepData {
-          tile: Coords::new(3, 3),
-          tile_edge: TileOrthoDir::East,
-        } ; "CW: [3, 3] East"
-    )]
-    #[test_case(
-        TEST_STEP_LVL,
-        RotationDirection::Clockwise,
-        WallEStepData {
-          tile: Coords::new(3, 3),
-          tile_edge: TileOrthoDir::East,
-        },
-        WallEStepData {
-          tile: Coords::new(3, 3),
-          tile_edge: TileOrthoDir::South,
-        } ; "CW: [3, 3] South"
-    )]
-    #[test_case(
-        TEST_STEP_LVL,
-        RotationDirection::Clockwise,
-        WallEStepData {
-          tile: Coords::new(3, 3),
-          tile_edge: TileOrthoDir::South,
-        },
-        WallEStepData {
-          tile: Coords::new(3, 3),
-          tile_edge: TileOrthoDir::West,
-        } ; "CW: [3, 3] West"
-    )]
-    #[test_case(
-        TEST_STEP_LVL,
-        RotationDirection::Clockwise,
-        WallEStepData {
-          tile: Coords::new(3, 3),
-          tile_edge: TileOrthoDir::West,
-        },
-        WallEStepData {
-          tile: Coords::new(2, 2),
-          tile_edge: TileOrthoDir::South,
-        } ; "CW: [2, 2] South"
-    )]
-    #[test_case(
-        TEST_STEP_LVL,
-        RotationDirection::Clockwise,
-        WallEStepData {
-          tile: Coords::new(2, 2),
-          tile_edge: TileOrthoDir::South,
-        },
-        WallEStepData {
-          tile: Coords::new(1, 2),
-          tile_edge: TileOrthoDir::South,
-        } ; "CW: [1, 2] South"
-    )]
-    #[test_case(
-        TEST_STEP_LVL,
-        RotationDirection::Clockwise,
-        WallEStepData {
-          tile: Coords::new(1, 2),
-          tile_edge: TileOrthoDir::South,
-        },
-        WallEStepData {
-          tile: Coords::new(0, 2),
-          tile_edge: TileOrthoDir::South,
-        } ; "CW: [0, 2] South"
-    )]
-    #[test_case(
-        TEST_STEP_LVL,
-        RotationDirection::Clockwise,
-        WallEStepData {
-          tile: Coords::new(0, 2),
-          tile_edge: TileOrthoDir::South,
-        },
-        WallEStepData {
-          tile: Coords::new(0, 2),
-          tile_edge: TileOrthoDir::West,
-        } ; "CW: [0, 2] West"
-    )]
-    #[test_case(
-        TEST_STEP_LVL,
-        RotationDirection::Clockwise,
-        WallEStepData {
-          tile: Coords::new(0, 2),
-          tile_edge: TileOrthoDir::West,
-        },
-        WallEStepData {
-          tile: Coords::new(0, 1),
-          tile_edge: TileOrthoDir::West,
-        } ; "CW: [0, 1] West"
-    )]
-    #[test_case(
-        TEST_STEP_LVL,
-        RotationDirection::Clockwise,
-        WallEStepData {
-          tile: Coords::new(0, 1),
-          tile_edge: TileOrthoDir::West,
-        },
-        WallEStepData {
-          tile: Coords::new(0, 0),
-          tile_edge: TileOrthoDir::West,
-        } ; "CW: [0, 0] West"
-    )]
-    #[test_case(
-        TEST_STEP_LVL,
-        RotationDirection::Clockwise,
-        WallEStepData {
-          tile: Coords::new(0, 0),
-          tile_edge: TileOrthoDir::West,
-        },
-        WallEStepData {
-          tile: Coords::new(0, 0),
-          tile_edge: TileOrthoDir::North,
-        } ; "CW: [0, 0] North"
-    )]
-    // CCW direction
-    #[test_case(
-        TEST_STEP_LVL,
-        RotationDirection::CounterClockwise,
-        WallEStepData {
-          tile: Coords::new(0, 0),
-          tile_edge: TileOrthoDir::North,
-        },
-        WallEStepData {
-          tile: Coords::new(0, 0),
-          tile_edge: TileOrthoDir::West,
-        } ; "CCW: [0, 0] West"
-    )]
-    #[test_case(
-        TEST_STEP_LVL,
-        RotationDirection::CounterClockwise,
-        WallEStepData {
-          tile: Coords::new(0, 0),
-          tile_edge: TileOrthoDir::West,
-        },
-        WallEStepData {
-          tile: Coords::new(0, 1),
-          tile_edge: TileOrthoDir::West,
-        } ; "CCW: [0, 1] West"
-    )]
-    #[test_case(
-        TEST_STEP_LVL,
-        RotationDirection::CounterClockwise,
-        WallEStepData {
-          tile: Coords::new(0, 1),
-          tile_edge: TileOrthoDir::West,
-        },
-        WallEStepData {
-          tile: Coords::new(0, 2),
-          tile_edge: TileOrthoDir::West,
-        } ; "CCW: [0, 2] West"
-    )]
-    #[test_case(
-        TEST_STEP_LVL,
-        RotationDirection::CounterClockwise,
-        WallEStepData {
-          tile: Coords::new(0, 2),
-          tile_edge: TileOrthoDir::West,
-        },
-        WallEStepData {
-          tile: Coords::new(0, 2),
-          tile_edge: TileOrthoDir::South,
-        } ; "CCW: [0, 2] South"
-    )]
-    #[test_case(
-        TEST_STEP_LVL,
-        RotationDirection::CounterClockwise,
-        WallEStepData {
-          tile: Coords::new(0, 2),
-          tile_edge: TileOrthoDir::South,
-        },
-        WallEStepData {
-          tile: Coords::new(1, 2),
-          tile_edge: TileOrthoDir::South,
-        } ; "CCW: [1, 2] South"
-    )]
-    #[test_case(
-        TEST_STEP_LVL,
-        RotationDirection::CounterClockwise,
-        WallEStepData {
-          tile: Coords::new(1, 2),
-          tile_edge: TileOrthoDir::South,
-        },
-        WallEStepData {
-          tile: Coords::new(2, 2),
-          tile_edge: TileOrthoDir::South,
-        } ; "CCW: [2, 2] South"
-    )]
-    #[test_case(
-        TEST_STEP_LVL,
-        RotationDirection::CounterClockwise,
-        WallEStepData {
-          tile: Coords::new(2, 2),
-          tile_edge: TileOrthoDir::South,
-        },
-        WallEStepData {
-          tile: Coords::new(3, 3),
-          tile_edge: TileOrthoDir::West,
-        } ; "CCW: [3, 3] West"
-    )]
-    #[test_case(
-        TEST_STEP_LVL,
-        RotationDirection::CounterClockwise,
-        WallEStepData {
-          tile: Coords::new(3, 3),
-          tile_edge: TileOrthoDir::West,
-        },
-        WallEStepData {
-          tile: Coords::new(3, 3),
-          tile_edge: TileOrthoDir::South,
-        } ; "CCW: [3, 3] South"
-    )]
-    #[test_case(
-        TEST_STEP_LVL,
-        RotationDirection::CounterClockwise,
-        WallEStepData {
-          tile: Coords::new(3, 3),
-          tile_edge: TileOrthoDir::South,
-        },
-        WallEStepData {
-          tile: Coords::new(3, 3),
-          tile_edge: TileOrthoDir::East,
-        } ; "CCW: [3, 3] East"
-    )]
-    #[test_case(
-        TEST_STEP_LVL,
-        RotationDirection::CounterClockwise,
-        WallEStepData {
-          tile: Coords::new(3, 3),
-          tile_edge: TileOrthoDir::East,
-        },
-        WallEStepData {
-          tile: Coords::new(3, 2),
-          tile_edge: TileOrthoDir::East,
-        } ; "CCW: [3, 2] East"
-    )]
-    #[test_case(
-        TEST_STEP_LVL,
-        RotationDirection::CounterClockwise,
-        WallEStepData {
-          tile: Coords::new(3, 2),
-          tile_edge: TileOrthoDir::East,
-        },
-        WallEStepData {
-          tile: Coords::new(3, 2),
-          tile_edge: TileOrthoDir::North,
-        } ; "CCW: [3, 2] North"
-    )]
-    #[test_case(
-        TEST_STEP_LVL,
-        RotationDirection::CounterClockwise,
-        WallEStepData {
-          tile: Coords::new(3, 2),
-          tile_edge: TileOrthoDir::North,
-        },
-        WallEStepData {
-          tile: Coords::new(2, 2),
-          tile_edge: TileOrthoDir::North,
-        } ; "CCW: [2, 2] North"
-    )]
-    #[test_case(
-        TEST_STEP_LVL,
-        RotationDirection::CounterClockwise,
-        WallEStepData {
-          tile: Coords::new(2, 2),
-          tile_edge: TileOrthoDir::North,
-        },
-        WallEStepData {
-          tile: Coords::new(1, 1),
-          tile_edge: TileOrthoDir::East,
-        } ; "CCW: [1, 1] East"
-    )]
-    #[test_case(
-        TEST_STEP_LVL,
-        RotationDirection::CounterClockwise,
-        WallEStepData {
-          tile: Coords::new(1, 1),
-          tile_edge: TileOrthoDir::East,
-        },
-        WallEStepData {
-          tile: Coords::new(1, 1),
-          tile_edge: TileOrthoDir::North,
-        } ; "CCW: [1, 1] North"
-    )]
-    #[test_case(
-        TEST_STEP_LVL,
-        RotationDirection::CounterClockwise,
-        WallEStepData {
-          tile: Coords::new(1, 1),
-          tile_edge: TileOrthoDir::North,
-        },
-        WallEStepData {
-          tile: Coords::new(0, 0),
-          tile_edge: TileOrthoDir::East,
-        } ; "CCW: [0, 0] East"
-    )]
-    #[test_case(
-        TEST_STEP_LVL,
-        RotationDirection::CounterClockwise,
-        WallEStepData {
-          tile: Coords::new(0, 0),
-          tile_edge: TileOrthoDir::East,
-        },
-        WallEStepData {
-          tile: Coords::new(0, 0),
-          tile_edge: TileOrthoDir::North,
-        } ; "CCW: [0, 0] North"
+        vec![
+            ((1, 1), East),
+            ((1, 2), East),
+            ((1, 2), South),
+            ((0, 3), East),
+            ((1, 4), North),
+            ((2, 3), West),
+            ((2, 3), North),
+            ((3, 3), North),
+            ((3, 3), East),
+            ((3, 4), East),
+        ] ; "Corner"
     )]
     #[traced_test]
-    fn step(
-        lvl: &str,
-        rot_dir: RotationDirection,
-        initial_state: WallEStepData,
-        expected: WallEStepData,
-    ) {
+    fn step(lvl: &str, rot_dir: RotationDirection, steps: Vec<((i16, i16), TileOrthoDir)>) {
+        if steps.len() < 2 {
+            panic!("There should be at least 2 steps, otherwise the testcase wouldn't do anything")
+        }
+
         let mut grid = TestGrid::from_str(lvl);
         let entity = Entity::PLACEHOLDER;
+        let (initial_tile, initial_tile_edge) = steps.first().unwrap();
         grid.place_object(
             tile::TileObject {
                 entity,
                 kind: tile::TileObjectKind::Enemy,
             },
-            initial_state.tile.into(),
+            initial_tile.clone().into(),
         )
         .expect("Failed to place enemy");
         let mut wallie = Wallie {
             rot_dir,
-            tile_edge: initial_state.tile_edge,
+            tile_edge: *initial_tile_edge,
         };
 
-        let next_tile = wallie.step(initial_state.tile, &grid);
-        let actual = WallEStepData {
-            tile: next_tile,
-            tile_edge: wallie.tile_edge,
-        };
+        for ((current_tile, current_edge), (next_tile, next_edge)) in
+            steps.into_iter().tuple_windows()
+        {
+            let current_tile = Coords::from(current_tile);
+            let next_tile = Coords::from(next_tile);
 
-        grid.print_ascii_debug_map(
-            false,
-            Some(move |_t| {
-                None
-                // if t == actual.tile {
-                //     Some(('*', DebugGridTileColor::Red))
-                // }
-                // // else if t == actual.prev_tile {
-                // //     let dir = actual.tile - actual.prev_tile;
-                // //     Some((
-                // //         match (dir.x, dir.y) {
-                // //             (0, -1) => '🢁',
-                // //             (1, 0) => '🢂',
-                // //             (0, 1) => '🢃',
-                // //             (-1, 0) => '🡸',
-                // //             _ => unreachable!(),
-                // //         },
-                // //         DebugGridTileColor::White,
-                // //     ))
-                // // }
-                // // else if t == expected.anchor {
-                // //     Some(('⨯', DebugGridTileColor::Red))
-                // // } else if t == actual.anchor {
-                // //     Some(('⨯', DebugGridTileColor::Green))
-                // // }
-                // else {
-                //     None
-                // }
-            }),
-        );
+            let actual_next_tile = wallie.step(current_tile, &grid);
 
-        pretty_assertions::assert_eq!(expected, actual)
+            let expected = (next_tile, next_edge);
+            let actual = (actual_next_tile, wallie.tile_edge);
+            if expected != actual {
+                tracing::warn!(?current_tile, ?current_edge, "---current---\n");
+                tracing::warn!(?next_tile, ?next_edge, "---next---\n");
+
+                grid.print_ascii_debug_map(false);
+            }
+
+            pretty_assertions::assert_eq!(expected, actual);
+
+            if current_tile != next_tile {
+                grid.move_object(entity, next_tile)
+                    .expect("Failed to move enemy");
+            }
+        }
     }
 }

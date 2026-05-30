@@ -356,7 +356,7 @@ impl Grid {
     pub fn ascii_debug_map(
         &self,
         show_move_chars: bool,
-        remap_tile: Option<impl Fn(Coords) -> Option<(char, DebugGridTileColor)>>,
+        remap_tile: impl Fn(Coords) -> Option<(char, DebugGridTileColor)>,
     ) -> String {
         let size = self.grid_size();
         let mut dbg_map = String::with_capacity(size.element_product() as _);
@@ -374,10 +374,8 @@ impl Grid {
                 dbg_map.push('\n');
                 dbg_map.push_str(&format!("{header_style}{:2}", tile.y));
             }
-            let (c, col) = remap_tile
-                .as_ref()
-                .and_then(|map| map(tile))
-                .unwrap_or_else(|| match self.occupied_tiles.get(&tile) {
+            let (c, col) =
+                remap_tile(tile).unwrap_or_else(|| match self.occupied_tiles.get(&tile) {
                     Some(TileObject { kind, .. }) => match kind {
                         TileObjectKind::Enemy => ('*', DebugGridTileColor::Red),
                         TileObjectKind::Wall(_) => ('#', DebugGridTileColor::White),
@@ -406,10 +404,15 @@ impl Grid {
     }
 
     #[cfg(test)]
-    pub fn print_ascii_debug_map(
+    pub fn print_ascii_debug_map(&self, show_move_chars: bool) {
+        self.print_ascii_debug_map_with_remap(show_move_chars, |_| None);
+    }
+
+    #[cfg(test)]
+    pub fn print_ascii_debug_map_with_remap(
         &self,
         show_move_chars: bool,
-        remap_tile: Option<impl Fn(Coords) -> Option<(char, DebugGridTileColor)>>,
+        remap_tile: impl Fn(Coords) -> Option<(char, DebugGridTileColor)>,
     ) {
         println!("{}", self.ascii_debug_map(show_move_chars, remap_tile));
     }
