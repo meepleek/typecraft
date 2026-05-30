@@ -35,6 +35,10 @@ pub const TILE_ALPHA_INACTIVE: f32 = 0.15;
 pub const TILE_ALPHA_TARGETABLE: f32 = 1.0;
 pub const TILE_ALPHA_HIDDEN: f32 = 0.0;
 
+pub trait TileEntityEvent {
+    fn tile(&self) -> Coords;
+}
+
 #[derive(Component, Debug, Clone, PartialEq, Deref, DerefMut)]
 pub struct ObjectCoords(pub Coords);
 

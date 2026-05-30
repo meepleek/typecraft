@@ -3,14 +3,23 @@ use crate::prelude::*;
 pub(super) fn plugin(app: &mut App) {
     app.add_observer(object_char_typed)
         .add_observer(tween_out_object)
-        .add_observer(fade_in_targetable_word)
+        .add_observer(fade_in_targetable_char::<ObjectWordsCompleted>)
+        .add_observer(fade_in_targetable_char::<ObjectExploded>)
         .add_observer(remove_exploded_object_from_grid)
         .add_observer(fade_out_exploded_object)
         .add_observer(emit_exploded_object_particles);
 }
 
 #[derive(EntityEvent, Debug, Clone, Copy, PartialEq)]
-pub struct ObjectExplode(pub Entity);
+pub struct ObjectExploded {
+    pub entity: Entity,
+    pub tile: Coords,
+}
+impl tile::TileEntityEvent for ObjectExploded {
+    fn tile(&self) -> Coords {
+        self.tile
+    }
+}
 
 #[derive(EntityEvent, Debug, Clone, Copy, PartialEq)]
 pub struct ObjectCharTyped(pub Entity);
@@ -19,6 +28,11 @@ pub struct ObjectCharTyped(pub Entity);
 pub struct ObjectWordsCompleted {
     entity: Entity,
     tile: Coords,
+}
+impl tile::TileEntityEvent for ObjectWordsCompleted {
+    fn tile(&self) -> Coords {
+        self.tile
+    }
 }
 
 fn object_char_typed(
@@ -54,21 +68,22 @@ fn tween_out_object(ev: On<ObjectWordsCompleted>, mut cmd: Commands) {
     );
 }
 
-fn fade_in_targetable_word(
-    ev: On<ObjectWordsCompleted>,
+fn fade_in_targetable_char<TEv: EntityEvent + tile::TileEntityEvent>(
+    ev: On<TEv>,
     grid: Option<Single<&grid::Grid>>,
     mut cmd: Commands,
 ) {
     let grid = or_return!(grid);
-    let e = or_return!(grid.get_targetable_tile(ev.tile).map(|tt| tt.move_char_e));
+    let tile = ev.tile();
+    let e = or_return!(grid.get_targetable_tile(tile).map(|tt| tt.move_char_e));
     cmd.spawn(
-        TextAlphaLensSrc::new(grid.targetable_char_alpha(ev.tile))
+        TextAlphaLensSrc::new(grid.targetable_char_alpha(tile))
             .duration(grid::Grid::TARGETABLE_TILE_FADE)
             .target(e),
     );
 }
 
-fn remove_exploded_object_from_grid(ev: On<ObjectExplode>, grid: Option<Single<&mut grid::Grid>>) {
+fn remove_exploded_object_from_grid(ev: On<ObjectExploded>, grid: Option<Single<&mut grid::Grid>>) {
     let mut grid = or_return!(grid);
     match grid.clear_object_tile(ev.event_target()) {
         Some(to) => {
@@ -80,7 +95,7 @@ fn remove_exploded_object_from_grid(ev: On<ObjectExplode>, grid: Option<Single<&
     }
 }
 
-fn fade_out_exploded_object(ev: On<ObjectExplode>, mut cmd: Commands) {
+fn fade_out_exploded_object(ev: On<ObjectExploded>, mut cmd: Commands) {
     cmd.spawn(
         TransformScaleLensSrc::new(Vec2::splat(1.75))
             .duration(ms(200))
@@ -96,6 +111,6 @@ fn fade_out_exploded_object(ev: On<ObjectExplode>, mut cmd: Commands) {
     );
 }
 
-fn emit_exploded_object_particles(_ev: On<ObjectExplode>) {
+fn emit_exploded_object_particles(_ev: On<ObjectExploded>) {
     // todo:
 }

@@ -152,7 +152,10 @@ impl Wallie {
                     coords.0 = tile;
                 }
                 Some(_) => {}
-                None => cmd.trigger(object::ObjectExplode(e)),
+                None => cmd.trigger(object::ObjectExploded {
+                    entity: e,
+                    tile: coords.0,
+                }),
             }
         }
     }
