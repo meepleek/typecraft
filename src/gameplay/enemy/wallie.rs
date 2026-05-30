@@ -233,6 +233,27 @@ mod tests {
         pretty_assertions::assert_eq!(expected, actual);
     }
 
+    #[test]
+    #[traced_test]
+    fn from_origin_tile_single_possible_edge() {
+        const LVL: &str = "
+        ....
+        .#..
+        ....
+        @G..
+        ";
+        let grid = TestGrid::from_str(LVL);
+
+        for seed in 0..1000 {
+            let mut rng = TestGrid::rng_from_seed(seed);
+
+            let wallie = Wallie::from_origin_tile(&grid, (2, 1).into(), &mut rng)
+                .expect("failed to get wallie from origin");
+
+            pretty_assertions::assert_eq!(TileOrthoDir::West, wallie.tile_edge);
+        }
+    }
+
     const TEST_STEP_LVL: &'static str = "
     .WWW
     ..WW

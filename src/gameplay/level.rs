@@ -12,8 +12,8 @@ pub const DEBUG_LVL: &str = "
 ########.....###
 ######.WGW....##
 #..WW..WWW.....#
-...WW.......W*.#
 ...WW..........#
+...WW.......W*.#
 ...WW.....@.....
 ...WW...........
 ...WW...........
@@ -44,6 +44,7 @@ pub fn spawn_level(
         DespawnOnExit(Screen::Gameplay),
     ));
     let mut rng = rng();
+    // let mut rng = StdRng::seed_from_u64(3);
     let populated_grid = populated::PopulatedGrid::new(
         DEFAULT_TILE_SIZE,
         grid_template,

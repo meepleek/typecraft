@@ -1,4 +1,5 @@
 use bevy::math::{I16Vec2, U16Vec2};
+use itertools::Itertools;
 
 use crate::{
     gameplay::wall,
@@ -191,44 +192,47 @@ impl PopulatedGrid {
                         move_char_e: e,
                     },
                 );
+            }
 
-                if let Some(kind) = self.occupied_tiles.get(&*t) {
-                    let entity = match kind {
-                        TileObjectKind::Enemy => {
-                            let wallie = enemy::wallie::Wallie::bundle(*t, &grid, rng);
-                            match wallie {
-                                Some(wallie) => {
-                                    Some(b.spawn((wallie, self.spawn_transform(*t))).id())
-                                }
-                                None => {
-                                    tracing::warn!(t=?*t, "Failed to spawn Wallie");
-                                    None
-                                }
+            for (t, kind) in self
+                .occupied_tiles
+                .iter()
+                // spawn enemies last in case they rely on wall placement etc
+                .sorted_unstable_by_key(|(_, kind)| matches!(kind, TileObjectKind::Enemy))
+            {
+                let entity = match kind {
+                    TileObjectKind::Enemy => {
+                        let wallie = enemy::wallie::Wallie::bundle(*t, &grid, rng);
+                        match wallie {
+                            Some(wallie) => Some(b.spawn((wallie, self.spawn_transform(*t))).id()),
+                            None => {
+                                tracing::warn!(t=?*t, "Failed to spawn Wallie");
+                                None
                             }
                         }
-                        TileObjectKind::Wall(typable_words) => Some(
-                            b.spawn((
-                                wall::wall(typable_words, self.is_player_ortho_tile(*t)),
-                                self.spawn_transform(*t),
-                            ))
-                            .id(),
-                        ),
-                        TileObjectKind::Goal => {
-                            // todo:
-                            None
-                        }
-                    };
-
-                    if let Some(entity) = entity {
-                        grid.place_object(
-                            tile::TileObject {
-                                entity,
-                                kind: kind.clone(),
-                            },
-                            *t,
-                        )
-                        .expect("Failed to place tile object");
                     }
+                    TileObjectKind::Wall(typable_words) => Some(
+                        b.spawn((
+                            wall::wall(typable_words, self.is_player_ortho_tile(*t)),
+                            self.spawn_transform(*t),
+                        ))
+                        .id(),
+                    ),
+                    TileObjectKind::Goal => {
+                        // todo:
+                        None
+                    }
+                };
+
+                if let Some(entity) = entity {
+                    grid.place_object(
+                        tile::TileObject {
+                            entity,
+                            kind: kind.clone(),
+                        },
+                        *t,
+                    )
+                    .expect("Failed to place tile object");
                 }
             }
 
