@@ -10,11 +10,11 @@ pub(super) fn plugin(app: &mut App) {
 #[derive(Component, Debug, Clone, Copy, PartialEq, Reflect)]
 #[reflect(Component)]
 pub struct Wallie {
-    rot_dir: RotationDirection,
+    rot_dir: WallOrientation,
     tile_edge: TileOrthoDir,
 }
 impl Wallie {
-    pub fn new(tile_edge: TileOrthoDir, rot_dir: RotationDirection) -> Self {
+    pub fn new(tile_edge: TileOrthoDir, rot_dir: WallOrientation) -> Self {
         Wallie { rot_dir, tile_edge }
     }
 
@@ -26,9 +26,9 @@ impl Wallie {
             .choose(rng);
         dir.and_then(TileOrthoDir::from_direction).map(|edge| {
             let rot_dir = if rng.random::<bool>() {
-                RotationDirection::Clockwise
+                WallOrientation::LeftHandSide
             } else {
-                RotationDirection::CounterClockwise
+                WallOrientation::RightHandSide
             };
             Self::new(edge, rot_dir)
         })
@@ -47,7 +47,7 @@ impl Wallie {
     }
 
     fn step(&mut self, current_tile: Coords, grid: &grid::Grid) -> Coords {
-        use {RotationDirection::*, TileOrthoDir::*};
+        use {TileOrthoDir::*, WallOrientation::*};
 
         fn step_impl(
             wallie: &mut Wallie,
@@ -56,14 +56,14 @@ impl Wallie {
             has_flipped: bool,
         ) -> Coords {
             let (target_dir, wall_dir) = match (wallie.rot_dir, wallie.tile_edge) {
-                (Clockwise, North) => (Coords::X, Coords::new(1, -1)),
-                (Clockwise, East) => (Coords::Y, Coords::ONE),
-                (Clockwise, South) => (Coords::NEG_X, Coords::new(-1, 1)),
-                (Clockwise, West) => (Coords::NEG_Y, Coords::NEG_ONE),
-                (CounterClockwise, North) => (Coords::NEG_X, Coords::NEG_ONE),
-                (CounterClockwise, East) => (Coords::NEG_Y, Coords::ONE),
-                (CounterClockwise, West) => (Coords::Y, Coords::new(-1, 1)),
-                (CounterClockwise, South) => (Coords::X, Coords::ONE),
+                (LeftHandSide, North) => (Coords::X, Coords::new(1, -1)),
+                (LeftHandSide, East) => (Coords::Y, Coords::ONE),
+                (LeftHandSide, South) => (Coords::NEG_X, Coords::new(-1, 1)),
+                (LeftHandSide, West) => (Coords::NEG_Y, Coords::NEG_ONE),
+                (RightHandSide, North) => (Coords::NEG_X, Coords::NEG_ONE),
+                (RightHandSide, East) => (Coords::NEG_Y, Coords::ONE),
+                (RightHandSide, West) => (Coords::Y, Coords::new(-1, 1)),
+                (RightHandSide, South) => (Coords::X, Coords::ONE),
             };
             let target_tile = current_tile + target_dir;
             let wall_tile = current_tile + wall_dir;
@@ -78,9 +78,10 @@ impl Wallie {
                 (true, false) => {
                     let prev_edge = wallie.tile_edge;
                     wallie.tile_edge = match wallie.rot_dir {
-                        Clockwise => wallie.tile_edge.rotate_ccw(),
-                        CounterClockwise => wallie.tile_edge.rotate_cw(),
+                        LeftHandSide => wallie.tile_edge.rotate_ccw(),
+                        RightHandSide => wallie.tile_edge.rotate_cw(),
                     };
+                    // tracing::warn!(?target_tile, ?wall_tile, ?prev_edge, edge=?wallie.tile_edge, "turning around");
                     // actually this doesn't work as there are ambiguities
                     // e.g. East => North can go to 2 different souths
                     // but maybe that's fine given the previous checks
@@ -110,8 +111,8 @@ impl Wallie {
                 (false, _) => {
                     if grid.is_wall_tile(target_tile) {
                         wallie.tile_edge = match wallie.rot_dir {
-                            Clockwise => wallie.tile_edge.rotate_cw(),
-                            CounterClockwise => wallie.tile_edge.rotate_ccw(),
+                            LeftHandSide => wallie.tile_edge.rotate_cw(),
+                            RightHandSide => wallie.tile_edge.rotate_ccw(),
                         };
                         current_tile
                     }
@@ -147,18 +148,20 @@ impl Wallie {
     }
 }
 
+/// Which side is the followed wall in relation the the Wallie
 #[derive(Debug, PartialEq, Clone, Copy, Reflect)]
-pub enum RotationDirection {
-    Clockwise,
-    CounterClockwise,
+pub enum WallOrientation {
+    LeftHandSide,
+    RightHandSide,
 }
-impl Not for RotationDirection {
+impl Not for WallOrientation {
     type Output = Self;
 
     fn not(self) -> Self::Output {
+        use WallOrientation::*;
         match self {
-            RotationDirection::Clockwise => RotationDirection::CounterClockwise,
-            RotationDirection::CounterClockwise => RotationDirection::Clockwise,
+            LeftHandSide => RightHandSide,
+            RightHandSide => LeftHandSide,
         }
     }
 }
@@ -171,6 +174,7 @@ mod tests {
 
     use super::*;
     use TileOrthoDir::*;
+    use WallOrientation::*;
 
     const TEST_CTOR_LVL: &'static str = "
     ..#
@@ -183,25 +187,25 @@ mod tests {
     #[test_case(
         Coords::ZERO,
         Some(Wallie {
-            rot_dir: RotationDirection::Clockwise,
+            rot_dir: LeftHandSide,
             tile_edge:TileOrthoDir::West
         }))]
     #[test_case(
         Coords::X,
         Some(Wallie {
-            rot_dir: RotationDirection::Clockwise,
+            rot_dir: LeftHandSide,
             tile_edge:TileOrthoDir::East
         }))]
     #[test_case(
         Coords::new(0, 2),
         Some(Wallie {
-            rot_dir: RotationDirection::CounterClockwise,
+            rot_dir: RightHandSide,
             tile_edge:TileOrthoDir::West
         }))]
     #[test_case(
         Coords::new(2, 2),
         Some(Wallie {
-            rot_dir: RotationDirection::CounterClockwise,
+            rot_dir: RightHandSide,
             tile_edge:TileOrthoDir::East
         }))]
     #[test_case(Coords::new(2, 0), None)]
@@ -224,20 +228,9 @@ mod tests {
     @G##
 ";
 
-    // todo: Wallie teleported [1, 3] => [3, 1] instead of going around, first movedg from
-    // [1, 1]
-    const TEST_STEP_CORNER_LVL: &str = "
-    ###.
-    #.#.
-    ..##
-    .#..
-    ....
-    ..@G
-    ";
-
     #[test_case(
         TEST_STEP_LVL,
-        RotationDirection::Clockwise,
+        LeftHandSide,
         vec![
             ((0, 0), East),
             ((1, 1), North),
@@ -255,11 +248,11 @@ mod tests {
             ((0, 1), West),
             ((0, 0), West),
             ((0, 0), North),
-        ] ; "Clockwise"
+        ] ; "LeftHandSide"
     )]
     #[test_case(
         TEST_STEP_LVL,
-        RotationDirection::CounterClockwise,
+        RightHandSide,
         vec![
             ((0, 0), West),
             ((0, 1), West),
@@ -277,11 +270,18 @@ mod tests {
             ((1, 1), North),
             ((0, 0), East),
             ((0, 0), North),
-        ] ; "CounterClockwise"
+        ] ; "RightHandSide"
     )]
     #[test_case(
-        TEST_STEP_CORNER_LVL,
-        RotationDirection::Clockwise,
+        "
+        ###.
+        #.#.
+        ..##
+        .#..
+        ....
+        ..@G
+        ",
+        LeftHandSide,
         vec![
             ((1, 1), East),
             ((1, 2), East),
@@ -295,8 +295,40 @@ mod tests {
             ((3, 4), East),
         ] ; "Corner"
     )]
+    #[test_case(
+        "
+        ...
+        .#.
+        ...
+        @G.
+        ",
+        RightHandSide,
+        vec![
+            ((2, 1), West),
+            ((1, 2), North),
+            ((0, 1), East),
+            ((1, 0), South),
+            ((2, 1), West),
+        ] ; "single center tile - RightHandSide"
+    )]
+    #[test_case(
+        "
+        ...
+        .#.
+        ...
+        @G.
+        ",
+        LeftHandSide,
+        vec![
+            ((2, 1), West),
+            ((1, 0), South),
+            ((0, 1), East),
+            ((1, 2), North),
+            ((2, 1), West),
+        ] ; "single center tile - LeftHandSide"
+    )]
     #[traced_test]
-    fn step(lvl: &str, rot_dir: RotationDirection, steps: Vec<((i16, i16), TileOrthoDir)>) {
+    fn step(lvl: &str, rot_dir: WallOrientation, steps: Vec<((i16, i16), TileOrthoDir)>) {
         if steps.len() < 2 {
             panic!("There should be at least 2 steps, otherwise the testcase wouldn't do anything")
         }
