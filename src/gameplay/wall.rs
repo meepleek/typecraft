@@ -48,6 +48,7 @@ fn object_char_typed(
     let completed = typable_words.advance();
     txt_w.update_tile_text(e, typable_words.text_sections(), active_tile);
     if completed {
+        tracing::debug!(?tile, "clearing object words tile");
         grid.clear_tile(tile);
         cmd.trigger(ObjectWordsCompleted { entity: e, tile });
     }
