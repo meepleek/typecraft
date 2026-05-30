@@ -20,6 +20,7 @@ pub use bevy::sprite::Anchor;
 pub use bevy::ui::FocusPolicy;
 pub use bevy::ui::Val::*;
 // pub use bevy_asset_loader::prelude::*;
+pub use bevy_trauma_shake::prelude::*;
 pub use rand::prelude::*;
 pub use rand::rng;
 pub use tiny_bail::prelude::*;
