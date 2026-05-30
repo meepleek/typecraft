@@ -81,6 +81,15 @@ impl TileObjectKind {
             Self::Wall(words) => words.next_char(),
         }
     }
+
+    pub fn words_mut(&mut self) -> Option<&mut TypableWords> {
+        use TileObjectKind::*;
+
+        match self {
+            Enemy | Goal => None,
+            Wall(typable_words) => Some(typable_words),
+        }
+    }
 }
 
 #[derive(Debug, PartialEq, Clone)]

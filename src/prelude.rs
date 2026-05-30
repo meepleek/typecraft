@@ -32,7 +32,7 @@ pub use crate::UpdateSystems;
 pub use crate::gameplay::{
     self, enemy,
     grid::{
-        Coords, TileOrthoDir, grid, populated, template,
+        Coords, TileOrthoDir, grid, object, populated, template,
         tile::{self, GridTileCoords, ObjectCoords},
         world::{GridSize, GridWorld},
     },

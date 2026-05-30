@@ -59,7 +59,7 @@ fn handle_input(
                 tile::TileObjectKind::Goal => todo!(),
                 tile::TileObjectKind::Wall(typable_words) => {
                     if typable_words.next_char().is_some_and(|wall_c| wall_c == c) {
-                        cmd.trigger(gameplay::wall::ObjectCharTyped(to.entity));
+                        cmd.trigger(object::ObjectCharTyped(to.entity));
                     }
                 }
             },
