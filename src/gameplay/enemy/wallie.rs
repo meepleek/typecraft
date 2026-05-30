@@ -49,7 +49,7 @@ impl Wallie {
         ))
     }
 
-    fn step(&mut self, current_tile: Coords, grid: &grid::Grid) -> Coords {
+    fn step(&mut self, current_tile: Coords, grid: &grid::Grid) -> Option<Coords> {
         use {TileOrthoDir::*, WallOrientation::*};
 
         fn step_impl(
@@ -57,7 +57,7 @@ impl Wallie {
             current_tile: Coords,
             grid: &grid::Grid,
             has_flipped: bool,
-        ) -> Coords {
+        ) -> Option<Coords> {
             let (target_dir, wall_dir) = match (wallie.orientation, wallie.tile_edge) {
                 (LeftHandSide, North) => (Coords::X, Coords::new(1, -1)),
                 (LeftHandSide, East) => (Coords::Y, Coords::ONE),
@@ -76,16 +76,22 @@ impl Wallie {
             match (target_tile_valid, wall_tile_valid) {
                 (true, true) => {
                     // continue to next tile, same edge
-                    target_tile
+                    Some(target_tile)
                 }
                 (true, false) => {
+                    let corner_tile = current_tile + wallie.tile_edge.direction();
+                    if !grid.is_wall_tile(corner_tile) {
+                        return None;
+                    }
+
                     let prev_edge = wallie.tile_edge;
                     wallie.tile_edge = match wallie.orientation {
                         LeftHandSide => wallie.tile_edge.rotate_ccw(),
                         RightHandSide => wallie.tile_edge.rotate_cw(),
                     };
                     tracing::debug!(?target_tile, ?wall_tile, ?prev_edge, edge=?wallie.tile_edge, "turning around");
-                    current_tile +
+                    Some(
+                        current_tile +
                         // don't need to match on wall orientation 'cause each pair is only valid for one orientation & not reachable for the other
                        match (prev_edge, wallie.tile_edge) {
                             (North, East) => Coords::NEG_ONE,
@@ -104,7 +110,8 @@ impl Wallie {
                             | (South, North)
                             | (West, West)
                             | (West, East) => unreachable!("Invalid round corner rotation"),
-                        }
+                        },
+                    )
                 }
                 (false, _) => {
                     if grid.is_wall_tile(target_tile) {
@@ -112,7 +119,7 @@ impl Wallie {
                             LeftHandSide => wallie.tile_edge.rotate_cw(),
                             RightHandSide => wallie.tile_edge.rotate_ccw(),
                         };
-                        current_tile
+                        Some(current_tile)
                     }
                     // todo: also check for dead-ends here or is that handled by the previous branch?
                     else if !has_flipped {
@@ -122,7 +129,7 @@ impl Wallie {
                         step_impl(wallie, current_tile, grid, true)
                     } else {
                         tracing::error!(?wallie, "failed to step even after flipping");
-                        current_tile
+                        Some(current_tile)
                     }
                 }
             }
@@ -139,8 +146,14 @@ impl Wallie {
         for (mut coords, mut walle) in &mut enemy_q {
             let prev_tile = coords.0;
             let tile = walle.step(coords.0, &grid);
-            if prev_tile != tile {
-                coords.0 = tile;
+            match tile {
+                Some(tile) if prev_tile != tile => {
+                    coords.0 = tile;
+                }
+                Some(_) => {}
+                None => {
+                    todo!("explode");
+                }
             }
         }
     }
@@ -383,7 +396,7 @@ mod tests {
             let current_tile = Coords::from(current_tile);
             let next_tile = Coords::from(next_tile);
 
-            let actual_next_tile = wallie.step(current_tile, &grid);
+            let actual_next_tile = wallie.step(current_tile, &grid).expect("Failed to step");
 
             let expected = (next_tile, next_edge);
             let actual = (actual_next_tile, wallie.tile_edge);
