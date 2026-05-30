@@ -184,6 +184,11 @@ impl Grid {
         self.occupied_tiles.remove(&coords)
     }
 
+    pub fn clear_object_tile(&mut self, entity: Entity) -> Option<TileObject> {
+        self.entity_to_coords(entity)
+            .and_then(|tile| self.clear_tile(tile))
+    }
+
     pub fn get_targetable_tile(&self, tile: Coords) -> Option<&TargetableTile> {
         self.targetable_tiles.get(&tile)
     }

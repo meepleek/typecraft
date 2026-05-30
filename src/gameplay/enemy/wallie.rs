@@ -140,10 +140,11 @@ impl Wallie {
 
     fn run_step(
         grid: Option<Single<&grid::Grid>>,
-        mut enemy_q: Query<(&mut ObjectCoords, &mut Wallie)>,
+        mut enemy_q: Query<(Entity, &mut ObjectCoords, &mut Wallie)>,
+        mut cmd: Commands,
     ) {
         let grid = or_return_quiet!(grid);
-        for (mut coords, mut walle) in &mut enemy_q {
+        for (e, mut coords, mut walle) in &mut enemy_q {
             let prev_tile = coords.0;
             let tile = walle.step(coords.0, &grid);
             match tile {
@@ -151,9 +152,7 @@ impl Wallie {
                     coords.0 = tile;
                 }
                 Some(_) => {}
-                None => {
-                    todo!("explode");
-                }
+                None => cmd.trigger(object::ObjectExplode(e)),
             }
         }
     }

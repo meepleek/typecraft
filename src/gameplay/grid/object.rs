@@ -3,8 +3,14 @@ use crate::prelude::*;
 pub(super) fn plugin(app: &mut App) {
     app.add_observer(object_char_typed)
         .add_observer(tween_out_object)
-        .add_observer(fade_in_targetable_word);
+        .add_observer(fade_in_targetable_word)
+        .add_observer(remove_exploded_object_from_grid)
+        .add_observer(fade_out_exploded_object)
+        .add_observer(emit_exploded_object_particles);
 }
+
+#[derive(EntityEvent, Debug, Clone, Copy, PartialEq)]
+pub struct ObjectExplode(pub Entity);
 
 #[derive(EntityEvent, Debug, Clone, Copy, PartialEq)]
 pub struct ObjectCharTyped(pub Entity);
@@ -60,4 +66,36 @@ fn fade_in_targetable_word(
             .duration(grid::Grid::TARGETABLE_TILE_FADE)
             .target(e),
     );
+}
+
+fn remove_exploded_object_from_grid(ev: On<ObjectExplode>, grid: Option<Single<&mut grid::Grid>>) {
+    let mut grid = or_return!(grid);
+    match grid.clear_object_tile(ev.event_target()) {
+        Some(to) => {
+            tracing::debug!(removed_tile_object=?to, "cleared exploded tile object");
+        }
+        None => {
+            tracing::warn!("failed to clear exploded object");
+        }
+    }
+}
+
+fn fade_out_exploded_object(ev: On<ObjectExplode>, mut cmd: Commands) {
+    cmd.spawn(
+        TransformScaleLensSrc::new(Vec2::splat(1.75))
+            .duration(ms(200))
+            .target(ev.event_target())
+            .easing(EaseFunction::QuarticOut)
+            .despawn_target_on_completion(),
+    );
+    cmd.spawn(
+        SpriteAlphaLensSrc::new(0.)
+            .duration(ms(130))
+            .target(ev.event_target())
+            .despawn_target_on_completion(),
+    );
+}
+
+fn emit_exploded_object_particles(_ev: On<ObjectExplode>) {
+    // todo:
 }
