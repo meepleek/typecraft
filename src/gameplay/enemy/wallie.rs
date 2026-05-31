@@ -41,7 +41,6 @@ impl Wallie {
         let wallie = Self::from_origin_tile(grid, tile, rng)?;
         Some((
             super::Enemy,
-            object::CustomObjectMovement,
             object::AllowPlayerCollision,
             wallie,
             Text2d::new(template::TemplateTileKind::ENEMY),
@@ -140,18 +139,17 @@ impl Wallie {
     }
 
     fn run_step(
-        grid: Option<Single<&mut grid::Grid>>,
+        grid: Option<Single<&grid::Grid>>,
         mut enemy_q: Query<(Entity, &mut Wallie)>,
         mut cmd: Commands,
     ) {
-        let mut grid = or_return_quiet!(grid);
+        let grid = or_return_quiet!(grid);
         for (e, mut wallie) in &mut enemy_q {
             let start_tile = or_continue!(grid.entity_to_coords(e));
             let tile = wallie.step(start_tile, &grid);
             match tile {
                 Some(end_tile) => {
                     if start_tile != end_tile {
-                        // or_continue!(grid.move_object(e, end_tile, true));
                         cmd.trigger(object::ObjectMove {
                             entity: e,
                             start_tile,

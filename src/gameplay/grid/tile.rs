@@ -6,7 +6,7 @@ use crate::prelude::*;
 pub(super) fn plugin(app: &mut App) {
     app.add_systems(
         Update,
-        ((tile_initial_fade_in, wiggle_tile_char).in_set(UpdateSystems::Visuals),),
+        ((tile_initial_fade_in, wiggle_tile_char).in_set(UpdateSystems::GridTargetableTiles),),
     );
     app.add_observer(fade_targetable_tile)
         .add_observer(update_tile_char_wiggle_target_speed)
@@ -30,6 +30,7 @@ pub struct TargetableTile {
     pub move_char_e: Entity,
 }
 
+// todo: might wanna make this a message scheduled after all player & object systems that collects all tiles & triggers fade for all of them
 #[derive(Event, Debug, Clone, Copy, PartialEq)]
 pub struct FadeTargetableTile {
     pub tile: Coords,

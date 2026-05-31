@@ -67,8 +67,10 @@ impl Plugin for AppPlugin {
             (
                 UpdateSystems::TickTimers,
                 UpdateSystems::RecordInput,
-                UpdateSystems::Grid,
-                UpdateSystems::Visuals,
+                UpdateSystems::GridPlayer,
+                UpdateSystems::GridObjects,
+                UpdateSystems::GridTargetableTiles,
+                UpdateSystems::Last,
             )
                 .chain(),
         );
@@ -86,8 +88,10 @@ impl Plugin for AppPlugin {
 pub enum UpdateSystems {
     TickTimers,
     RecordInput,
-    Grid,
-    Visuals,
+    GridPlayer,
+    GridObjects,
+    GridTargetableTiles,
+    Last,
 }
 
 /// Whether or not the game is paused.

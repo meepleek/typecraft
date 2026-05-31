@@ -45,9 +45,6 @@ pub struct ObjectMove {
 }
 
 #[derive(Component, Debug)]
-pub struct CustomObjectMovement;
-
-#[derive(Component, Debug)]
 pub struct AllowPlayerCollision;
 
 fn move_object(
