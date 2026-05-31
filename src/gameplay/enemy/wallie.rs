@@ -22,7 +22,7 @@ impl Wallie {
     }
 
     pub fn from_origin_tile(grid: &grid::Grid, tile: Coords, rng: &mut impl Rng) -> Option<Self> {
-        grid.can_place_at(tile).ok()?;
+        grid.can_place_at(tile, false).ok()?;
         let dir = grid::DIRS_ORTHO_CW
             .into_iter()
             .filter(|dir| grid.is_wall_tile(tile + dir))
@@ -41,7 +41,8 @@ impl Wallie {
         let wallie = Self::from_origin_tile(grid, tile, rng)?;
         Some((
             super::Enemy,
-            ObjectCoords(tile),
+            object::CustomObjectMovement,
+            object::AllowPlayerCollision,
             wallie,
             Text2d::new(template::TemplateTileKind::ENEMY),
             TextFont::from_font_size(90.),
@@ -71,7 +72,7 @@ impl Wallie {
             let target_tile = current_tile + target_dir;
             let wall_tile = current_tile + wall_dir;
             let target_tile_valid =
-                grid.is_targetable_tile(target_tile) && !grid.is_occupied_tile(target_tile);
+                grid.is_targetable_tile(target_tile) && !grid.is_occupied_tile(target_tile, true);
             let wall_tile_valid = grid.is_wall_tile(wall_tile);
             match (target_tile_valid, wall_tile_valid) {
                 (true, true) => {
@@ -139,22 +140,28 @@ impl Wallie {
     }
 
     fn run_step(
-        grid: Option<Single<&grid::Grid>>,
-        mut enemy_q: Query<(Entity, &mut ObjectCoords, &mut Wallie)>,
+        grid: Option<Single<&mut grid::Grid>>,
+        mut enemy_q: Query<(Entity, &mut Wallie)>,
         mut cmd: Commands,
     ) {
-        let grid = or_return_quiet!(grid);
-        for (e, mut coords, mut walle) in &mut enemy_q {
-            let prev_tile = coords.0;
-            let tile = walle.step(coords.0, &grid);
+        let mut grid = or_return_quiet!(grid);
+        for (e, mut wallie) in &mut enemy_q {
+            let start_tile = or_continue!(grid.entity_to_coords(e));
+            let tile = wallie.step(start_tile, &grid);
             match tile {
-                Some(tile) if prev_tile != tile => {
-                    coords.0 = tile;
+                Some(end_tile) => {
+                    if start_tile != end_tile {
+                        // or_continue!(grid.move_object(e, end_tile, true));
+                        cmd.trigger(object::ObjectMove {
+                            entity: e,
+                            start_tile,
+                            end_tile,
+                        });
+                    }
                 }
-                Some(_) => {}
                 None => cmd.trigger(object::ObjectExploded {
                     entity: e,
-                    tile: coords.0,
+                    tile: start_tile,
                 }),
             }
         }
@@ -433,7 +440,7 @@ mod tests {
             pretty_assertions::assert_eq!(expected, actual);
 
             if current_tile != next_tile {
-                grid.move_object(entity, next_tile)
+                grid.move_object(entity, next_tile, true)
                     .expect("Failed to move enemy");
             }
         }

@@ -6,41 +6,20 @@ use crate::prelude::*;
 pub(super) fn plugin(app: &mut App) {
     app.add_systems(
         Update,
-        (
-            (move_tile_object,).in_set(UpdateSystems::Grid),
-            (
-                fade_in_tile,
-                update_wall_word_sections,
-                tween_targetable_chars_alpha_on_player_move,
-                update_tile_char_wiggle_target_speed,
-                wiggle_tile_char,
-            )
-                .after(UpdateSystems::Visuals),
-        ),
+        ((tile_initial_fade_in, wiggle_tile_char).in_set(UpdateSystems::Visuals),),
     );
-
-    // todo: fixme - this is here just to sort out ordering issues with some systems even when using labels
-    for sys in [
-        UpdateSystems::TickTimers,
-        UpdateSystems::RecordInput,
-        UpdateSystems::Grid,
-        UpdateSystems::Visuals,
-    ] {
-        let system = move |mut _cmd: Commands| {};
-        app.add_systems(Update, system.in_set(sys).run_if(run_once));
-    }
+    app.add_observer(fade_targetable_tile)
+        .add_observer(update_tile_char_wiggle_target_speed)
+        .add_observer(trigger_tween_targetable_chars_alpha_on_player_move);
 }
 
 pub const TILE_ALPHA_INACTIVE: f32 = 0.15;
 pub const TILE_ALPHA_TARGETABLE: f32 = 1.0;
 pub const TILE_ALPHA_HIDDEN: f32 = 0.0;
 
-pub trait TileEntityEvent {
+pub trait TileEvent {
     fn tile(&self) -> Coords;
 }
-
-#[derive(Component, Debug, Clone, PartialEq, Deref, DerefMut)]
-pub struct ObjectCoords(pub Coords);
 
 #[derive(Component, Debug, Clone, PartialEq, Deref, DerefMut)]
 pub struct GridTileCoords(pub Coords);
@@ -49,6 +28,12 @@ pub struct GridTileCoords(pub Coords);
 pub struct TargetableTile {
     pub move_char: char,
     pub move_char_e: Entity,
+}
+
+#[derive(Event, Debug, Clone, Copy, PartialEq)]
+pub struct FadeTargetableTile {
+    pub tile: Coords,
+    pub direction: FadeDirection,
 }
 
 #[derive(Component, Debug, Clone, Copy)]
@@ -366,50 +351,7 @@ impl TileIterator {
     }
 }
 
-fn move_tile_object(
-    tile_q: Populated<(Entity, &ObjectCoords, Has<player::Player>), Changed<ObjectCoords>>,
-    grid: Option<Single<&mut grid::Grid>>,
-    mut cmd: Commands,
-) {
-    let mut grid = or_return_quiet!(grid);
-    for (e, tc, is_player) in tile_q {
-        let tile = tc.0;
-        let prev_tile = or_continue!(grid.entity_to_coords(e));
-        if tile == prev_tile {
-            tracing::warn!(?e, ?prev_tile, ?tile, "nowhere to move tile object");
-            continue;
-        }
-        let world_pos = or_return!(grid.tile_to_world(tile));
-        let (start_tile, end_tile) = if is_player {
-            let start_tile = or_return!(grid.get_targetable_tile(grid.player_tile())).clone();
-            let end_tile = or_return!(grid.get_targetable_tile(tile)).clone();
-            grid.move_player(tile);
-            (start_tile, end_tile)
-        } else {
-            match grid.move_object(e, tile) {
-                Ok(res) => res,
-                Err(err) => {
-                    tracing::warn!(?tile, ?err, "Failed to move object");
-                    return;
-                }
-            }
-        };
-        cmd.try_insert_to(
-            e,
-            TransformPositionLensSrc::new(world_pos).duration(ms(250)),
-        );
-        cmd.try_insert_to(
-            start_tile.move_char_e,
-            TextAlphaLensSrc::new(grid.targetable_char_alpha(prev_tile)).duration(ms(150)),
-        );
-        cmd.try_insert_to(
-            end_tile.move_char_e,
-            TextAlphaLensSrc::new(tile::TILE_ALPHA_HIDDEN).duration(ms(150)),
-        );
-    }
-}
-
-fn fade_in_tile(
+fn tile_initial_fade_in(
     tile_q: Query<(Entity, &GridTileCoords), Added<GridTileCoords>>,
     grid: Option<Single<&mut grid::Grid>>,
     mut trans_q: Query<&mut Transform>,
@@ -453,31 +395,34 @@ fn fade_in_tile(
     }
 }
 
-fn tween_targetable_chars_alpha_on_player_move(
-    _: Populated<(), (With<player::Player>, Changed<ObjectCoords>)>,
+fn fade_targetable_tile(
+    ev: On<FadeTargetableTile>,
     grid: Option<Single<&grid::Grid>>,
     mut cmd: Commands,
 ) {
     let grid = or_return_quiet!(grid);
-    for (t, tt) in grid.iter_movable_tiles(true) {
-        cmd.spawn(
-            TextAlphaLensSrc::new(grid.targetable_char_alpha(t))
-                .duration(grid::Grid::TARGETABLE_TILE_FADE)
-                .target(tt.move_char_e),
-        );
-    }
+    let e = or_return!(grid.get_targetable_tile(ev.tile)).move_char_e;
+    cmd.try_insert_to(
+        e,
+        TextAlphaLensSrc::new(match ev.direction {
+            FadeDirection::In => grid.targetable_char_alpha(ev.tile),
+            FadeDirection::Out => tile::TILE_ALPHA_HIDDEN,
+        })
+        .duration(ms(150)),
+    );
 }
 
-// todo: move to wall
-fn update_wall_word_sections(
-    _: Populated<(), (With<player::Player>, Changed<ObjectCoords>)>,
-    grid: Option<Single<&mut grid::Grid>>,
-    mut txt_w: Text2dWriter,
+fn trigger_tween_targetable_chars_alpha_on_player_move(
+    _ev: On<player::PlayerMove>,
+    grid: Option<Single<&grid::Grid>>,
+    mut cmd: Commands,
 ) {
     let grid = or_return_quiet!(grid);
-    for (t, wall_e, words) in grid.iter_destroyable_wall_tiles() {
-        let active_tile = grid.is_player_ortho_tile(t);
-        txt_w.update_tile_text(wall_e, words.text_sections(), active_tile);
+    for (t, _) in grid.iter_movable_tiles(true) {
+        cmd.trigger(FadeTargetableTile {
+            tile: t,
+            direction: FadeDirection::In,
+        });
     }
 }
 
@@ -505,7 +450,7 @@ impl CharWiggle {
 }
 
 fn update_tile_char_wiggle_target_speed(
-    _: Populated<&ObjectCoords, (With<player::Player>, Changed<ObjectCoords>)>,
+    _ev: On<player::PlayerMove>,
     grid: Option<Single<&mut grid::Grid>>,
     mut wiggle_q: Query<&mut CharWiggle>,
 ) {

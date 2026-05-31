@@ -5,6 +5,7 @@
 
 use bevy::{asset::AssetMetaCheck, prelude::*};
 
+mod anim;
 mod assets;
 mod audio;
 pub mod gameplay;

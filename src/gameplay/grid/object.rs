@@ -3,11 +3,13 @@ use crate::prelude::*;
 pub(super) fn plugin(app: &mut App) {
     app.add_observer(object_char_typed)
         .add_observer(tween_out_object)
-        .add_observer(fade_in_targetable_char::<ObjectWordsCompleted>)
-        .add_observer(fade_in_targetable_char::<ObjectExploded>)
+        .add_observer(trigger_fade_in_targetable_char::<ObjectWordsCompleted>)
+        .add_observer(trigger_fade_in_targetable_char::<ObjectExploded>)
         .add_observer(remove_exploded_object_from_grid)
         .add_observer(fade_out_exploded_object)
-        .add_observer(emit_exploded_object_particles);
+        .add_observer(emit_exploded_object_particles)
+        .add_observer(move_object)
+        .add_observer(update_wall_word_sections);
 }
 
 #[derive(EntityEvent, Debug, Clone, Copy, PartialEq)]
@@ -15,7 +17,7 @@ pub struct ObjectExploded {
     pub entity: Entity,
     pub tile: Coords,
 }
-impl tile::TileEntityEvent for ObjectExploded {
+impl tile::TileEvent for ObjectExploded {
     fn tile(&self) -> Coords {
         self.tile
     }
@@ -29,10 +31,54 @@ pub struct ObjectWordsCompleted {
     entity: Entity,
     tile: Coords,
 }
-impl tile::TileEntityEvent for ObjectWordsCompleted {
+impl tile::TileEvent for ObjectWordsCompleted {
     fn tile(&self) -> Coords {
         self.tile
     }
+}
+
+#[derive(EntityEvent, Debug, Clone, Copy, PartialEq)]
+pub struct ObjectMove {
+    pub entity: Entity,
+    pub start_tile: Coords,
+    pub end_tile: Coords,
+}
+
+#[derive(Component, Debug)]
+pub struct CustomObjectMovement;
+
+#[derive(Component, Debug)]
+pub struct AllowPlayerCollision;
+
+fn move_object(
+    ev: On<ObjectMove>,
+    grid: Option<Single<&mut grid::Grid>>,
+    allow_player_collision_q: Query<(), With<AllowPlayerCollision>>,
+    mut cmd: Commands,
+) {
+    let mut grid = or_return_quiet!(grid);
+    if ev.start_tile == ev.end_tile {
+        tracing::warn!(?ev, "invalid tile object move");
+        return;
+    }
+    let e = ev.event_target();
+    let world_pos = or_return!(grid.tile_to_world(ev.end_tile));
+    if let Err(err) = grid.move_object(e, ev.end_tile, allow_player_collision_q.contains(e)) {
+        tracing::warn!(?ev, ?err, "Failed to move object");
+        return;
+    };
+    cmd.try_insert_to(
+        e,
+        TransformPositionLensSrc::new(world_pos).duration(ms(250)),
+    );
+    cmd.trigger(tile::FadeTargetableTile {
+        tile: ev.start_tile,
+        direction: FadeDirection::In,
+    });
+    cmd.trigger(tile::FadeTargetableTile {
+        tile: ev.end_tile,
+        direction: FadeDirection::Out,
+    });
 }
 
 fn object_char_typed(
@@ -68,19 +114,28 @@ fn tween_out_object(ev: On<ObjectWordsCompleted>, mut cmd: Commands) {
     );
 }
 
-fn fade_in_targetable_char<TEv: EntityEvent + tile::TileEntityEvent>(
-    ev: On<TEv>,
+// todo: might reset unfinished words on move? but probly in a different system?
+fn update_wall_word_sections(
+    _ev: On<player::PlayerMove>,
     grid: Option<Single<&grid::Grid>>,
+    mut txt_w: Text2dWriter,
+) {
+    let grid = or_return_quiet!(grid);
+    for (t, wall_e, words) in grid.iter_destroyable_wall_tiles() {
+        let active_tile = grid.is_player_ortho_tile(t);
+        txt_w.update_tile_text(wall_e, words.text_sections(), active_tile);
+    }
+}
+
+fn trigger_fade_in_targetable_char<TEv: EntityEvent + tile::TileEvent>(
+    ev: On<TEv>,
     mut cmd: Commands,
 ) {
-    let grid = or_return!(grid);
     let tile = ev.tile();
-    let e = or_return!(grid.get_targetable_tile(tile).map(|tt| tt.move_char_e));
-    cmd.spawn(
-        TextAlphaLensSrc::new(grid.targetable_char_alpha(tile))
-            .duration(grid::Grid::TARGETABLE_TILE_FADE)
-            .target(e),
-    );
+    cmd.trigger(tile::FadeTargetableTile {
+        tile,
+        direction: FadeDirection::In,
+    });
 }
 
 fn remove_exploded_object_from_grid(ev: On<ObjectExploded>, grid: Option<Single<&mut grid::Grid>>) {

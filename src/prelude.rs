@@ -30,11 +30,12 @@ pub use mplk_tween::prelude::*;
 pub use mplk_utils::prelude::*;
 
 pub use crate::UpdateSystems;
+pub use crate::anim::FadeDirection;
 pub use crate::gameplay::{
     self, enemy,
     grid::{
         Coords, TileOrthoDir, grid, object, populated, template,
-        tile::{self, GridTileCoords, ObjectCoords},
+        tile::{self, GridTileCoords},
         world::{GridSize, GridWorld},
     },
     input, player,

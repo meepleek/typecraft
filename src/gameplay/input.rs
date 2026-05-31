@@ -64,7 +64,10 @@ fn handle_input(
                 }
             },
             None => {
-                cmd.try_insert_to(player_state.entity, tile::ObjectCoords(tn.tile));
+                cmd.trigger(player::PlayerMove {
+                    start_tile: player_state.tile,
+                    end_tile: tn.tile,
+                });
             }
         }
     }

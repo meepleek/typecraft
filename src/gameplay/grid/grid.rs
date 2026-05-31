@@ -103,27 +103,31 @@ impl Grid {
     }
 
     pub fn entity_to_coords(&self, entity: Entity) -> Option<Coords> {
-        if entity == self.player_state.entity {
-            return Some(self.player_tile());
-        }
-
-        self.tile_object_coords.get(&entity).cloned()
+        self.tile_object_coords
+            .get(&entity)
+            .copied()
+            .or_else(|| (entity == self.player_state.entity).then(|| self.player_tile()))
     }
 
-    pub fn is_occupied_tile(&self, tile: Coords) -> bool {
-        self.occupied_tiles.contains_key(&tile) || self.player_tile() == tile
+    pub fn is_occupied_tile(&self, tile: Coords, allow_player_collision: bool) -> bool {
+        self.occupied_tiles.contains_key(&tile)
+            || (!allow_player_collision && self.player_tile() == tile)
     }
 
     pub fn is_targetable_tile(&self, tile: Coords) -> bool {
         self.targetable_tiles.contains_key(&tile)
     }
 
-    pub fn can_place_at(&self, tile: Coords) -> Result<(), PlaceError> {
+    pub fn can_place_at(
+        &self,
+        tile: Coords,
+        allow_player_collision: bool,
+    ) -> Result<(), PlaceError> {
         if !self.within_bounds(tile) {
             return Err(PlaceError::OutOfBounds);
         } else if !self.is_targetable_tile(tile) {
             return Err(PlaceError::NotTargetable);
-        } else if self.is_occupied_tile(tile) {
+        } else if self.is_occupied_tile(tile, allow_player_collision) {
             return Err(PlaceError::Taken);
         }
         Ok(())
@@ -134,7 +138,7 @@ impl Grid {
         tile_object: TileObject,
         coords: Coords,
     ) -> Result<(), PlaceError> {
-        self.can_place_at(coords)?;
+        self.can_place_at(coords, false)?;
         self.tile_object_coords.insert(tile_object.entity, coords);
         self.occupied_tiles.insert(coords, tile_object);
 
@@ -149,12 +153,13 @@ impl Grid {
         &mut self,
         object_entity: Entity,
         coords: Coords,
+        allow_player_collision: bool,
     ) -> Result<(TargetableTile, TargetableTile), MoveError> {
-        self.can_place_at(coords)?;
-        let Some(prev_tile) = self.tile_object_coords.get(&object_entity).copied() else {
+        self.can_place_at(coords, allow_player_collision)?;
+        let Some(prev_tile) = self.entity_to_coords(object_entity) else {
             return Err(MoveError::EntityLookupFailed);
         };
-        let Some(tile_obj) = self.clear_tile(prev_tile.clone()) else {
+        let Some(tile_obj) = self.clear_tile(prev_tile) else {
             panic!("Reverse coords lookup failed")
         };
         self.place_object(tile_obj, coords)?;
@@ -462,7 +467,7 @@ mod tests {
     #[test_case(0, 50 => matches Err(PlaceError::OutOfBounds))]
     fn can_place_at_coords(x: i16, y: i16) -> Result<(), PlaceError> {
         let board = test_grid();
-        board.can_place_at((x, y).into())
+        board.can_place_at((x, y).into(), false)
     }
 
     #[test]
@@ -479,7 +484,7 @@ mod tests {
             )
             .expect("Place first piece");
 
-        assert_eq!(board.can_place_at(coords), Err(PlaceError::Taken));
+        assert_eq!(board.can_place_at(coords, false), Err(PlaceError::Taken));
     }
 
     const PLAYER_TILE: (i16, i16) = (4, 2);
