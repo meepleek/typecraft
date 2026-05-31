@@ -92,6 +92,7 @@ impl TestGrid {
                     kind: kind,
                 },
                 t,
+                false,
             )
             .expect("Failed to place test grid tile object");
         }

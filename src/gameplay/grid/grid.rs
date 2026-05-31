@@ -137,8 +137,9 @@ impl Grid {
         &mut self,
         tile_object: TileObject,
         coords: Coords,
+        allow_player_collision: bool,
     ) -> Result<(), PlaceError> {
-        self.can_place_at(coords, false)?;
+        self.can_place_at(coords, allow_player_collision)?;
         self.tile_object_coords.insert(tile_object.entity, coords);
         self.occupied_tiles.insert(coords, tile_object);
 
@@ -162,7 +163,7 @@ impl Grid {
         let Some(tile_obj) = self.clear_tile(prev_tile) else {
             panic!("Reverse coords lookup failed")
         };
-        self.place_object(tile_obj, coords)?;
+        self.place_object(tile_obj, coords, allow_player_collision)?;
         let (Some(prev_tt), Some(new_tt)) = (
             self.targetable_tiles.get(&prev_tile),
             self.targetable_tiles.get(&coords),
@@ -351,6 +352,7 @@ impl Grid {
                     kind: kind,
                 },
                 t,
+                false,
             )
             .expect("Failed to place test grid tile object");
         }
@@ -481,6 +483,7 @@ mod tests {
                     entity: Entity::PLACEHOLDER,
                 },
                 coords,
+                false,
             )
             .expect("Place first piece");
 

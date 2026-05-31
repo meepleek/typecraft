@@ -411,6 +411,7 @@ mod tests {
                 kind: tile::TileObjectKind::Enemy,
             },
             initial_tile.clone().into(),
+            false,
         )
         .expect("Failed to place enemy");
         let mut wallie = Wallie {

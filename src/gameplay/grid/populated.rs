@@ -231,6 +231,7 @@ impl PopulatedGrid {
                             kind: kind.clone(),
                         },
                         *t,
+                        false,
                     )
                     .expect("Failed to place tile object");
                 }
