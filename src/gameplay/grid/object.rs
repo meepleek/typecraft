@@ -45,12 +45,14 @@ pub struct ObjectMove {
 }
 
 #[derive(Component, Debug)]
-pub struct AllowPlayerCollision;
+pub struct AllowPlayerCollision {
+    pub dmg: u8,
+}
 
 fn move_object(
     ev: On<ObjectMove>,
     grid: Option<Single<&mut grid::Grid>>,
-    allow_player_collision_q: Query<(), With<AllowPlayerCollision>>,
+    allow_player_collision_q: Query<&AllowPlayerCollision>,
     mut cmd: Commands,
 ) {
     let mut grid = or_return_quiet!(grid);
@@ -60,10 +62,23 @@ fn move_object(
     }
     let e = ev.event_target();
     let world_pos = or_return!(grid.tile_to_world(ev.end_tile));
-    if let Err(err) = grid.move_object(e, ev.end_tile, allow_player_collision_q.contains(e)) {
+    let allow_player_collision = allow_player_collision_q.get(e);
+    if let Err(err) = grid.move_object(e, ev.end_tile, allow_player_collision.is_ok()) {
         tracing::warn!(?ev, ?err, "Failed to move object");
         return;
     };
+    if let Ok(allow_player_collision) = allow_player_collision
+        && ev.end_tile == grid.player_tile()
+    {
+        // todo: these need to be delayed till the object actually moves into the player (+leeway)
+        cmd.trigger(player::PlayerHit {
+            dmg: allow_player_collision.dmg,
+        });
+        cmd.trigger(ObjectExploded {
+            entity: e,
+            tile: ev.end_tile,
+        });
+    }
     cmd.try_insert_to(
         e,
         TransformPositionLensSrc::new(world_pos).duration(ms(250)),

@@ -1,12 +1,26 @@
 //! Spawn the main level.
 
-use crate::{PrimaryCamera, prelude::*};
+use crate::prelude::*;
 use bevy::prelude::*;
 use grid::Grid;
 use mplk_utils::math::asymptotic_smoothing_with_delta_time;
 
 pub(super) fn plugin(app: &mut App) {
+    app.add_plugins(TraumaPlugin);
+    app.add_systems(Startup, spawn_camera);
     app.add_systems(Update, track_player);
+}
+
+#[derive(Component)]
+pub struct PrimaryCamera;
+
+fn spawn_camera(mut commands: Commands) {
+    commands.spawn((
+        Name::new("Camera"),
+        Camera2d,
+        PrimaryCamera,
+        Shake::default(),
+    ));
 }
 
 fn track_player(

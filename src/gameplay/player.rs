@@ -72,5 +72,5 @@ fn handle_player_hit(ev: On<PlayerHit>, mut hp: Single<&mut PlayerHp>) {
 }
 
 fn screenshake_on_hit(_ev: On<PlayerHit>, mut shake: Shakes) {
-    shake.add_trauma(0.25);
+    shake.add_trauma(0.55);
 }
