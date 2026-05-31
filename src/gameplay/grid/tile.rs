@@ -414,7 +414,7 @@ fn fade_targetable_tile(
 }
 
 fn trigger_tween_targetable_chars_alpha_on_player_move(
-    _ev: On<player::PlayerMove>,
+    _ev: On<player::PlayerMoved>,
     grid: Option<Single<&grid::Grid>>,
     mut cmd: Commands,
 ) {
@@ -451,7 +451,7 @@ impl CharWiggle {
 }
 
 fn update_tile_char_wiggle_target_speed(
-    _ev: On<player::PlayerMove>,
+    _ev: On<player::PlayerMoved>,
     grid: Option<Single<&mut grid::Grid>>,
     mut wiggle_q: Query<&mut CharWiggle>,
 ) {

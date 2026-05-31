@@ -64,10 +64,7 @@ fn handle_input(
                 }
             },
             None => {
-                cmd.trigger(player::PlayerMove {
-                    start_tile: player_state.tile,
-                    end_tile: tn.tile,
-                });
+                cmd.trigger(player::PlayerMove { tile: tn.tile });
             }
         }
     }

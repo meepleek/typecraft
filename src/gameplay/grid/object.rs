@@ -128,7 +128,7 @@ fn tween_out_object(ev: On<ObjectWordsCompleted>, mut cmd: Commands) {
 
 // todo: might reset unfinished words on move? but probly in a different system?
 fn update_wall_word_sections(
-    _ev: On<player::PlayerMove>,
+    _ev: On<player::PlayerMoved>,
     grid: Option<Single<&grid::Grid>>,
     mut txt_w: Text2dWriter,
 ) {

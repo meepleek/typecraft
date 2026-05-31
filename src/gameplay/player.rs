@@ -8,6 +8,11 @@ pub(super) fn plugin(app: &mut App) {
 
 #[derive(Event, Debug, Clone, Copy, PartialEq)]
 pub struct PlayerMove {
+    pub tile: Coords,
+}
+
+#[derive(Event, Debug, Clone, Copy, PartialEq)]
+pub struct PlayerMoved {
     pub start_tile: Coords,
     pub end_tile: Coords,
 }
@@ -42,26 +47,24 @@ pub struct PlayerHit {
 
 fn move_player(ev: On<PlayerMove>, grid: Option<Single<&mut grid::Grid>>, mut cmd: Commands) {
     let mut grid = or_return_quiet!(grid);
-    if ev.start_tile == ev.end_tile {
+    let start_tile = grid.player_tile();
+    let end_tile = ev.tile;
+    if start_tile == end_tile {
         tracing::warn!(?ev, "invalid player move");
         return;
     }
-    or_return!(grid.can_place_at(ev.end_tile, false));
+    or_return!(grid.can_place_at(end_tile, false));
     let e = grid.player_state().entity;
-    let world_pos = or_return!(grid.tile_to_world(ev.end_tile));
-    grid.move_player(ev.end_tile);
+    let world_pos = or_return!(grid.tile_to_world(end_tile));
+    grid.move_player(end_tile);
     cmd.try_insert_to(
         e,
         TransformPositionLensSrc::new(world_pos).duration(ms(250)),
     );
-    // cmd.trigger(tile::FadeTargetableTile {
-    //     tile: ev.start_tile,
-    //     direction: FadeDirection::In,
-    // });
-    // cmd.trigger(tile::FadeTargetableTile {
-    //     tile: ev.end_tile,
-    //     direction: FadeDirection::Out,
-    // });
+    cmd.trigger(PlayerMoved {
+        start_tile,
+        end_tile,
+    });
 }
 
 fn handle_player_hit(ev: On<PlayerHit>, mut hp: Single<&mut PlayerHp>) {
