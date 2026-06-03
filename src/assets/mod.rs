@@ -22,4 +22,18 @@ pub(super) fn plugin(app: &mut App) {
             .load_collection::<wordlist::WordlistAssets>(),
     );
     // app.add_systems(Startup, setup_particles);
+    //
+    //
+
+    // default font
+    Assets::insert(
+        &mut app.world_mut().resource_mut(),
+        AssetId::default(),
+        Font {
+            data: include_bytes!("../../assets/fonts/AtkinsonHyperlegibleMono_medium.ttf")
+                .to_vec()
+                .into(),
+        },
+    )
+    .expect("Failed to set default font");
 }
