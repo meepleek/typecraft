@@ -9,6 +9,12 @@ pub struct TemplateTile {
     pub kind: TemplateTileKind,
 }
 
+#[derive(Debug, PartialEq, Clone)]
+pub enum TemplateEnemy {
+    Wallie,
+    Bouncer(TileDir),
+}
+
 #[derive(Debug, PartialEq)]
 pub enum TemplateTileKind {
     PermaWall,
@@ -16,28 +22,30 @@ pub enum TemplateTileKind {
     Wall,
     Player,
     Goal,
-    Enemy,
-}
-impl TemplateTileKind {
-    pub const PERMAWALL: char = '#';
-    pub const EMPTY: char = '.';
-    pub const WALL: char = 'W';
-    pub const PLAYER: char = '@';
-    pub const GOAL: char = 'G';
-    pub const ENEMY: char = '*';
+    Enemy(TemplateEnemy),
 }
 
 impl TryFrom<char> for TemplateTileKind {
     type Error = ();
 
     fn try_from(value: char) -> Result<Self, Self::Error> {
+        use TileDiagDir::*;
+        use TileDir::*;
+        use TileOrthoDir::*;
+
         match value {
-            Self::PERMAWALL => Ok(Self::PermaWall),
-            Self::EMPTY => Ok(Self::Empty),
-            Self::WALL => Ok(Self::Wall),
-            Self::PLAYER => Ok(Self::Player),
-            Self::GOAL => Ok(Self::Goal),
-            Self::ENEMY => Ok(Self::Enemy),
+            '#' => Ok(Self::PermaWall),
+            '.' => Ok(Self::Empty),
+            'W' => Ok(Self::Wall),
+            '@' => Ok(Self::Player),
+            'G' => Ok(Self::Goal),
+            '*' => Ok(Self::Enemy(TemplateEnemy::Wallie)),
+            '>' => Ok(Self::Enemy(TemplateEnemy::Bouncer(Ortho(East)))),
+            '<' => Ok(Self::Enemy(TemplateEnemy::Bouncer(Ortho(West)))),
+            '^' => Ok(Self::Enemy(TemplateEnemy::Bouncer(Ortho(North)))),
+            'v' => Ok(Self::Enemy(TemplateEnemy::Bouncer(Ortho(South)))),
+            '/' => Ok(Self::Enemy(TemplateEnemy::Bouncer(Diag(SouthEast)))),
+            '\\' => Ok(Self::Enemy(TemplateEnemy::Bouncer(Diag(SouthWest)))),
             _ => Err(()),
         }
     }
@@ -140,7 +148,7 @@ mod tests {
                     ((0, 0), PermaWall),
                     ((1, 0), PermaWall),
                     ((2, 0), Empty),
-                    ((3, 0), Enemy),
+                    ((3, 0), Enemy(TemplateEnemy::Wallie)),
                     ((4, 0), Wall),
                     ((5, 0), Wall),
                     ((0, 1), PermaWall),

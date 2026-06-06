@@ -89,7 +89,7 @@ impl TestGrid {
             grid.place_object(
                 TileObject {
                     entity: get_e(),
-                    kind: kind,
+                    kind: kind.into(),
                 },
                 t,
                 false,

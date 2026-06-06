@@ -6,14 +6,38 @@ use crate::{
     prelude::{player::PlayerGridState, *},
 };
 use input::MoveChars;
-use template::{GridChunkTemplate, TemplateTileKind};
-use tile::TileObjectKind;
+use template::GridChunkTemplate;
+use template::TemplateTileKind;
+
+#[derive(Debug, PartialEq, Clone)]
+pub enum OccupiedPopulatedTile {
+    Enemy(template::TemplateEnemy),
+    Wall(tile::TypableWords),
+    Goal,
+}
+impl OccupiedPopulatedTile {
+    fn wall<TText: Into<String>>(words: impl IntoIterator<Item = TText>) -> Self {
+        Self::Wall(tile::TypableWords::new(words))
+    }
+}
+
+impl From<OccupiedPopulatedTile> for tile::TileObjectKind {
+    fn from(value: OccupiedPopulatedTile) -> Self {
+        use tile::TileObjectKind::*;
+
+        match value {
+            OccupiedPopulatedTile::Enemy(_) => Enemy,
+            OccupiedPopulatedTile::Wall(typable_words) => Wall(typable_words),
+            OccupiedPopulatedTile::Goal => Goal,
+        }
+    }
+}
 
 #[derive(Debug, PartialEq)]
 pub struct PopulatedGrid {
     pub player_tile: Coords,
     pub targetable_tiles: HashMap<Coords, char>,
-    pub occupied_tiles: HashMap<Coords, tile::TileObjectKind>,
+    pub occupied_tiles: HashMap<Coords, OccupiedPopulatedTile>,
     pub tile_size: u16,
     pub grid_size: U16Vec2,
 }
@@ -52,12 +76,15 @@ impl PopulatedGrid {
                 TemplateTileKind::Player | TemplateTileKind::Empty => {
                     populated.insert_random_targetable_tile(tt.tile, move_chars, &mut rng)
                 }
-                TemplateTileKind::Enemy => {
-                    populated.add_object(tt.tile, TileObjectKind::Enemy, move_chars, &mut rng)
-                }
+                TemplateTileKind::Enemy(enemy) => populated.add_object(
+                    tt.tile,
+                    OccupiedPopulatedTile::Enemy(enemy),
+                    move_chars,
+                    &mut rng,
+                ),
                 TemplateTileKind::Wall => populated.add_ititial_wall(tt.tile, wordlist, &mut rng),
                 TemplateTileKind::Goal => {
-                    populated.add_object(tt.tile, TileObjectKind::Goal, move_chars, &mut rng)
+                    populated.add_object(tt.tile, OccupiedPopulatedTile::Goal, move_chars, &mut rng)
                 }
             };
         }
@@ -75,7 +102,7 @@ impl PopulatedGrid {
     fn add_object(
         &mut self,
         tile: Coords,
-        obj_kind: tile::TileObjectKind,
+        obj_kind: OccupiedPopulatedTile,
         move_chars: &MoveChars,
         rng: &mut impl Rng,
     ) {
@@ -103,7 +130,7 @@ impl PopulatedGrid {
         words.shuffle(&mut rng);
         _ = self
             .occupied_tiles
-            .insert(tile, tile::TileObjectKind::wall(words));
+            .insert(tile, OccupiedPopulatedTile::wall(words).into());
         let targetable_char = word
             .text()
             .chars()
@@ -142,10 +169,12 @@ impl PopulatedGrid {
                     return Vec::new();
                 }
                 match self.occupied_tiles.get(&target) {
-                    Some(TileObjectKind::Wall(words)) => {
+                    Some(OccupiedPopulatedTile::Wall(words)) => {
                         words.words.iter().flat_map(|w| w.chars.clone()).collect()
                     }
-                    Some(TileObjectKind::Enemy) | Some(TileObjectKind::Goal) | None => self
+                    Some(OccupiedPopulatedTile::Enemy(_))
+                    | Some(OccupiedPopulatedTile::Goal)
+                    | None => self
                         .targetable_tiles
                         .get(&target)
                         .map_or_else(|| Vec::new(), |targetable_char| vec![*targetable_char]),
@@ -198,27 +227,40 @@ impl PopulatedGrid {
                 .occupied_tiles
                 .iter()
                 // spawn enemies last in case they rely on wall placement etc
-                .sorted_unstable_by_key(|(_, kind)| matches!(kind, TileObjectKind::Enemy))
+                .sorted_unstable_by_key(|(_, kind)| {
+                    matches!(kind, OccupiedPopulatedTile::Enemy(..))
+                })
             {
                 let entity = match kind {
-                    TileObjectKind::Enemy => {
-                        let wallie = enemy::wallie::Wallie::bundle(*t, &grid, rng);
-                        match wallie {
-                            Some(wallie) => Some(b.spawn((wallie, self.spawn_transform(*t))).id()),
-                            None => {
-                                tracing::warn!(t=?*t, "Failed to spawn Wallie");
-                                None
+                    OccupiedPopulatedTile::Enemy(enemy) => match enemy {
+                        template::TemplateEnemy::Wallie => {
+                            let wallie = enemy::wallie::Wallie::bundle(*t, &grid, rng);
+                            match wallie {
+                                Some(wallie) => {
+                                    Some(b.spawn((wallie, self.spawn_transform(*t))).id())
+                                }
+                                None => {
+                                    tracing::warn!(t=?*t, "Failed to spawn Wallie");
+                                    None
+                                }
                             }
                         }
-                    }
-                    TileObjectKind::Wall(typable_words) => Some(
+                        template::TemplateEnemy::Bouncer(tile_dir) => {
+                            let bouncer = enemy::bouncer::Bouncer::bundle(
+                                *tile_dir,
+                                self.spawn_transform(*t),
+                            );
+                            Some(b.spawn(bouncer).id())
+                        }
+                    },
+                    OccupiedPopulatedTile::Wall(typable_words) => Some(
                         b.spawn((
                             wall::wall(typable_words, self.is_player_ortho_tile(*t)),
                             self.spawn_transform(*t),
                         ))
                         .id(),
                     ),
-                    TileObjectKind::Goal => {
+                    OccupiedPopulatedTile::Goal => {
                         // todo:
                         None
                     }
@@ -228,7 +270,7 @@ impl PopulatedGrid {
                     grid.place_object(
                         tile::TileObject {
                             entity,
-                            kind: kind.clone(),
+                            kind: kind.clone().into(),
                         },
                         *t,
                         false,
@@ -304,13 +346,13 @@ mod tests {
 
         grid.add_object(
             Coords::ONE,
-            TileObjectKind::wall(["wall"]),
+            OccupiedPopulatedTile::wall(["wall"]),
             &move_chars,
             &mut rng,
         );
 
         pretty_assertions::assert_eq!(
-            HashMap::from([(Coords::ONE, TileObjectKind::wall(["wall"]))]),
+            HashMap::from([(Coords::ONE, OccupiedPopulatedTile::wall(["wall"]))]),
             grid.occupied_tiles
         );
         pretty_assertions::assert_eq!(HashMap::from([(Coords::ONE, 's')]), grid.targetable_tiles);
@@ -332,7 +374,7 @@ mod tests {
         grid.add_ititial_wall(Coords::ONE, &wordlist, &mut rng);
 
         pretty_assertions::assert_eq!(
-            HashMap::from([(Coords::ONE, TileObjectKind::wall(["rat"]))]),
+            HashMap::from([(Coords::ONE, OccupiedPopulatedTile::wall(["rat"]))]),
             grid.occupied_tiles
         );
         pretty_assertions::assert_eq!(HashMap::from([(Coords::ONE, 't')]), grid.targetable_tiles);
@@ -392,12 +434,12 @@ mod tests {
         );
         assert_tile_hashmap_eq(
             [
-                ((3, 0), TileObjectKind::wall(["fit"])),
-                ((4, 0), TileObjectKind::Goal),
-                ((5, 0), TileObjectKind::wall(["bus"])),
-                ((3, 1), TileObjectKind::wall(["ice"])),
-                ((4, 1), TileObjectKind::wall(["egg", "leg"])),
-                ((5, 1), TileObjectKind::wall(["add", "dad"])),
+                ((3, 0), OccupiedPopulatedTile::wall(["fit"])),
+                ((4, 0), OccupiedPopulatedTile::Goal),
+                ((5, 0), OccupiedPopulatedTile::wall(["bus"])),
+                ((3, 1), OccupiedPopulatedTile::wall(["ice"])),
+                ((4, 1), OccupiedPopulatedTile::wall(["egg", "leg"])),
+                ((5, 1), OccupiedPopulatedTile::wall(["add", "dad"])),
             ],
             grid.occupied_tiles.clone(),
         );

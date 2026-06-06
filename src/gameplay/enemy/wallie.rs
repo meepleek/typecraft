@@ -41,9 +41,9 @@ impl Wallie {
         let wallie = Self::from_origin_tile(grid, tile, rng)?;
         Some((
             super::Enemy,
-            object::AllowPlayerCollision { dmg: 1 },
+            object::ContactDamage { dmg: 1 },
             wallie,
-            Text2d::new(template::TemplateTileKind::ENEMY),
+            Text2d::new("*"),
             TextFont::from_font_size(90.),
             TextColor(tailwind::RED_400.with_alpha(1.).into()),
         ))

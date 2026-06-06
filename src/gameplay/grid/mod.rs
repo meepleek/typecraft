@@ -11,6 +11,50 @@ pub mod world;
 pub type Coords = I16Vec2;
 
 #[derive(Debug, Clone, Copy, PartialEq, Reflect)]
+pub enum TileDir {
+    Ortho(TileOrthoDir),
+    Diag(TileDiagDir),
+}
+impl TileDir {
+    pub const NORTH: Coords = Coords::NEG_Y;
+    pub const NORTH_EAST: Coords = Coords::new(1, -1);
+    pub const EAST: Coords = Coords::X;
+    pub const SOUTH_EAST: Coords = Coords::ONE;
+    pub const SOUTH: Coords = Coords::Y;
+    pub const SOUTH_WEST: Coords = Coords::new(-1, 1);
+    pub const WEST: Coords = Coords::NEG_X;
+    pub const NORTH_WEST: Coords = Coords::NEG_ONE;
+
+    pub fn from_direction(dir: Coords) -> Option<Self> {
+        match dir {
+            Self::NORTH | Self::EAST | Self::SOUTH | Self::WEST => Some(Self::Ortho(
+                TileOrthoDir::from_direction(dir).expect("Invalid ortho dir"),
+            )),
+            Self::NORTH_EAST | Self::SOUTH_EAST | Self::SOUTH_WEST | Self::NORTH_WEST => Some(
+                Self::Diag(TileDiagDir::from_direction(dir).expect("Invalid diag dir")),
+            ),
+            _ => None,
+        }
+    }
+
+    pub fn direction(&self) -> Coords {
+        use TileDir::*;
+
+        match self {
+            Ortho(tile_ortho_dir) => tile_ortho_dir.direction(),
+            Diag(tile_diag_dir) => tile_diag_dir.direction(),
+        }
+    }
+
+    pub fn rotation(&self) -> Rot2 {
+        match self {
+            Self::Ortho(tile_ortho_dir) => tile_ortho_dir.rotation(),
+            Self::Diag(tile_diag_dir) => tile_diag_dir.rotation(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Reflect)]
 pub enum TileOrthoDir {
     North,
     East,
@@ -22,10 +66,10 @@ impl TileOrthoDir {
         use TileOrthoDir::*;
 
         match dir {
-            Coords::NEG_Y => Some(North),
-            Coords::X => Some(East),
-            Coords::Y => Some(South),
-            Coords::NEG_X => Some(West),
+            TileDir::NORTH => Some(North),
+            TileDir::EAST => Some(East),
+            TileDir::SOUTH => Some(South),
+            TileDir::WEST => Some(West),
             _ => None,
         }
     }
@@ -34,11 +78,20 @@ impl TileOrthoDir {
         use TileOrthoDir::*;
 
         match self {
-            North => Coords::NEG_Y,
-            East => Coords::X,
-            South => Coords::Y,
-            West => Coords::NEG_X,
+            North => TileDir::NORTH,
+            East => TileDir::EAST,
+            South => TileDir::SOUTH,
+            West => TileDir::WEST,
         }
+    }
+
+    pub fn rotation(&self) -> Rot2 {
+        Rot2::degrees(match self {
+            TileOrthoDir::North => 0.,
+            TileOrthoDir::West => 90.,
+            TileOrthoDir::South => 180.,
+            TileOrthoDir::East => 270.,
+        })
     }
 
     pub fn rotate_cw(&self) -> Self {
@@ -61,6 +114,47 @@ impl TileOrthoDir {
             South => East,
             West => South,
         }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Reflect)]
+pub enum TileDiagDir {
+    NorthEast,
+    SouthEast,
+    SouthWest,
+    NorthWest,
+}
+impl TileDiagDir {
+    pub fn from_direction(dir: Coords) -> Option<Self> {
+        use TileDiagDir::*;
+
+        match dir {
+            TileDir::NORTH_EAST => Some(NorthEast),
+            TileDir::NORTH_WEST => Some(NorthWest),
+            TileDir::SOUTH_EAST => Some(SouthEast),
+            TileDir::SOUTH_WEST => Some(SouthWest),
+            _ => None,
+        }
+    }
+
+    pub fn direction(&self) -> Coords {
+        use TileDiagDir::*;
+
+        match self {
+            NorthEast => TileDir::NORTH_EAST,
+            SouthEast => TileDir::SOUTH_EAST,
+            SouthWest => TileDir::SOUTH_WEST,
+            NorthWest => TileDir::NORTH_WEST,
+        }
+    }
+
+    pub fn rotation(&self) -> Rot2 {
+        Rot2::degrees(match self {
+            TileDiagDir::NorthWest => 45.,
+            TileDiagDir::SouthWest => 135.,
+            TileDiagDir::SouthEast => 225.,
+            TileDiagDir::NorthEast => 315.,
+        })
     }
 }
 

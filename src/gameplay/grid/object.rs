@@ -45,14 +45,14 @@ pub struct ObjectMove {
 }
 
 #[derive(Component, Debug)]
-pub struct AllowPlayerCollision {
+pub struct ContactDamage {
     pub dmg: u8,
 }
 
 fn move_object(
     ev: On<ObjectMove>,
     grid: Option<Single<&mut grid::Grid>>,
-    allow_player_collision_q: Query<&AllowPlayerCollision>,
+    allow_player_collision_q: Query<&ContactDamage>,
     mut cmd: Commands,
 ) {
     let mut grid = or_return_quiet!(grid);

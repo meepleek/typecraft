@@ -1,4 +1,4 @@
-use crate::{gameplay::grid::template::TemplateTileKind, prelude::*};
+use crate::prelude::*;
 
 pub(super) fn plugin(app: &mut App) {
     app.add_observer(handle_player_hit)
@@ -21,8 +21,8 @@ pub fn player() -> impl Bundle {
     (
         Player,
         PlayerHp(3),
-        Text2d::new(TemplateTileKind::PLAYER),
-        TextFont::from_font_size(50.),
+        Text2d::new("('')"),
+        TextFont::from_font_size(28.),
     )
 }
 

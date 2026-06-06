@@ -34,7 +34,7 @@ pub use crate::anim::FadeDirection;
 pub use crate::gameplay::{
     self, enemy,
     grid::{
-        Coords, TileOrthoDir, grid, object, populated, template,
+        Coords, TileDiagDir, TileDir, TileOrthoDir, grid, object, populated, template,
         tile::{self, GridTileCoords},
         world::{GridSize, GridWorld},
     },
