@@ -6,10 +6,10 @@ pub(super) fn plugin(app: &mut App) {
     app.add_systems(Update, Bouncer::run_step.run_if(on_real_timer(ms(500))));
 }
 
-// pub enum BouncerStepResult {
-//     Move(Coords),
-//     Rotate,
-// }
+pub enum BouncerStep {
+    Move(Coords),
+    Rotate(TileDir),
+}
 
 #[derive(Component, Debug, Clone, Copy, PartialEq, Reflect)]
 #[reflect(Component)]
@@ -34,10 +34,9 @@ impl Bouncer {
         )
     }
 
-    fn step(&mut self, current_tile: Coords, grid: &grid::Grid) -> Coords {
-        // use TileDiagDir::*;
+    fn step(&mut self, current_tile: Coords, grid: &grid::Grid) -> BouncerStep {
+        use BouncerStep::*;
         use TileDir::*;
-        // use TileOrthoDir::*;
 
         fn valid_target_tile(grid: &grid::Grid, tile: Coords) -> bool {
             !grid.is_wall_tile(tile) && !grid.is_occupied_tile(tile, true)
@@ -48,14 +47,13 @@ impl Bouncer {
         match self.direction {
             Ortho(_) => {
                 if valid_target_tile(grid, target_tile) {
-                    target_tile
+                    Move(target_tile)
                 } else {
                     let reflected_dir = -dir;
-                    self.direction = Ortho(
+                    Rotate(Ortho(
                         TileOrthoDir::from_direction(reflected_dir)
                             .expect("invalid reflect ortho dir"),
-                    );
-                    current_tile
+                    ))
                 }
             }
             Diag(_) => {
@@ -84,14 +82,10 @@ impl Bouncer {
                     (true, _, true) | (_, true, true) => None,
                 };
                 match new_dir {
-                    Some(new_dir) => {
-                        tracing::warn!(?new_dir, ?current_tile, next = ?(current_tile + new_dir));
-                        self.direction = Diag(
-                            TileDiagDir::from_direction(new_dir).expect("invalid reflect diag dir"),
-                        );
-                        current_tile
-                    }
-                    None => target_tile,
+                    Some(new_dir) => Rotate(Diag(
+                        TileDiagDir::from_direction(new_dir).expect("invalid reflect diag dir"),
+                    )),
+                    None => Move(target_tile),
                 }
             }
         }
@@ -105,13 +99,23 @@ impl Bouncer {
         let grid = or_return_quiet!(grid);
         for (e, mut bouncer) in &mut enemy_q {
             let start_tile = or_continue!(grid.entity_to_coords(e));
-            let end_tile = bouncer.step(start_tile, &grid);
-            if start_tile != end_tile {
-                cmd.trigger(object::ObjectMove {
-                    entity: e,
-                    start_tile,
-                    end_tile,
-                });
+            let step = bouncer.step(start_tile, &grid);
+            match step {
+                BouncerStep::Move(end_tile) => {
+                    cmd.trigger(object::ObjectMove {
+                        entity: e,
+                        start_tile,
+                        end_tile,
+                    });
+                }
+                BouncerStep::Rotate(tile_dir) => {
+                    bouncer.direction = tile_dir;
+                    cmd.spawn(
+                        TransformRotationDegreesLensSrc::new(tile_dir.rotation().as_degrees())
+                            .duration(ms(350))
+                            .target(e),
+                    );
+                }
             }
         }
     }
@@ -128,6 +132,7 @@ mod tests {
     use TileDir::*;
     use TileOrthoDir::*;
 
+    // todo: revamp to use BouncerStep
     #[test_case(
         "
         .WWW
@@ -183,14 +188,14 @@ mod tests {
         ] ; "diag - SE"
     )]
     #[traced_test]
-    fn step(lvl: &str, steps: Vec<((i16, i16), TileDir)>) {
-        if steps.len() < 2 {
+    fn step(lvl: &str, initial_state: ((i16, i16), TileDir), expected_steps: Vec<BouncerStep>) {
+        if expected_steps.len() < 2 {
             panic!("There should be at least 2 steps, otherwise the testcase wouldn't do anything")
         }
 
         let mut grid = TestGrid::from_str(lvl);
         let entity = Entity::PLACEHOLDER;
-        let (initial_tile, initial_dir) = steps.first().unwrap();
+        let (initial_tile, initial_dir) = expected_steps.first().unwrap();
         grid.place_object(
             tile::TileObject {
                 entity,
@@ -205,15 +210,15 @@ mod tests {
         };
 
         for ((current_tile, current_dir), (next_tile, next_dir)) in
-            steps.into_iter().tuple_windows()
+            expected_steps.into_iter().tuple_windows()
         {
             let current_tile = Coords::from(current_tile);
             let next_tile = Coords::from(next_tile);
 
-            let actual_next_tile = wallie.step(current_tile, &grid);
+            let actual_step = wallie.step(current_tile, &grid);
 
             let expected = (next_tile, next_dir);
-            let actual = (actual_next_tile, wallie.direction);
+            let actual = (actual_step, wallie.direction);
             if expected != actual {
                 tracing::warn!(?current_tile, ?current_dir, "---current---\n");
                 tracing::warn!(?next_tile, ?next_dir, "---next---\n");
