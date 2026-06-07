@@ -6,6 +6,7 @@ pub(super) fn plugin(app: &mut App) {
     app.add_systems(Update, Bouncer::run_step.run_if(on_real_timer(ms(500))));
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum BouncerStep {
     Move(Coords),
     Rotate(TileDir),
@@ -123,11 +124,11 @@ impl Bouncer {
 
 #[cfg(test)]
 mod tests {
-    use itertools::Itertools;
     use test_case::test_case;
     use tracing_test::traced_test;
 
     use super::*;
+    use BouncerStep::*;
     use TileDiagDir::*;
     use TileDir::*;
     use TileOrthoDir::*;
@@ -141,14 +142,14 @@ mod tests {
         ###.
         @G##
         ",
+        ((0, 0), Ortho(South)),
         vec![
-            ((0, 0), Ortho(South)),
-            ((0, 1), Ortho(South)),
-            ((0, 2), Ortho(South)),
-            ((0, 2), Ortho(North)),
-            ((0, 1), Ortho(North)),
-            ((0, 0), Ortho(North)),
-            ((0, 0), Ortho(South)),
+            Move(Coords::new(0, 1)),
+            Move(Coords::new(0, 2)),
+            Rotate(Ortho(North)),
+            Move(Coords::new(0, 1)),
+            Move(Coords::new(0, 0)),
+            Rotate(Ortho(South)),
         ] ; "vertical"
     )]
     #[test_case(
@@ -159,12 +160,12 @@ mod tests {
         ###.
         @G##
         ",
+        ((0, 1), Ortho(East)),
         vec![
-            ((0, 1), Ortho(East)),
-            ((1, 1), Ortho(East)),
-            ((1, 1), Ortho(West)),
-            ((0, 1), Ortho(West)),
-            ((0, 1), Ortho(East)),
+            Move(Coords::new(1, 1)),
+            Rotate(Ortho(West)),
+            Move(Coords::new(0, 1)),
+            Rotate(Ortho(East)),
         ] ; "horizontal"
     )]
     #[test_case(
@@ -175,16 +176,16 @@ mod tests {
         ###
         @G#
         ",
+        ((1, 0), Diag(NorthEast)),
         vec![
-            ((1, 0), Diag(NorthEast)),
-            ((1, 0), Diag(SouthEast)),
-            ((2, 1), Diag(SouthEast)),
-            ((2, 1), Diag(SouthWest)),
-            ((1, 2), Diag(SouthWest)),
-            ((1, 2), Diag(NorthWest)),
-            ((0, 1), Diag(NorthWest)),
-            ((0, 1), Diag(NorthEast)),
-            ((1, 0), Diag(NorthEast)),
+            Rotate(Diag(SouthEast)),
+            Move(Coords::new(2, 1)),
+            Rotate(Diag(SouthWest)),
+            Move(Coords::new(1, 2)),
+            Rotate(Diag(NorthWest)),
+            Move(Coords::new(0, 1)),
+            Rotate(Diag(NorthEast)),
+            Move(Coords::new(1, 0)),
         ] ; "diag - SE"
     )]
     #[traced_test]
@@ -195,42 +196,37 @@ mod tests {
 
         let mut grid = TestGrid::from_str(lvl);
         let entity = Entity::PLACEHOLDER;
-        let (initial_tile, initial_dir) = expected_steps.first().unwrap();
+        let mut tile = initial_state.0.into();
         grid.place_object(
             tile::TileObject {
                 entity,
                 kind: tile::TileObjectKind::Enemy,
             },
-            initial_tile.clone().into(),
+            tile,
             false,
         )
         .expect("Failed to place enemy");
-        let mut wallie = Bouncer {
-            direction: *initial_dir,
+        let mut bouncer = Bouncer {
+            direction: initial_state.1,
         };
 
-        for ((current_tile, current_dir), (next_tile, next_dir)) in
-            expected_steps.into_iter().tuple_windows()
-        {
-            let current_tile = Coords::from(current_tile);
-            let next_tile = Coords::from(next_tile);
+        for expected_step in expected_steps {
+            let actual_step = bouncer.step(tile, &grid);
 
-            let actual_step = wallie.step(current_tile, &grid);
-
-            let expected = (next_tile, next_dir);
-            let actual = (actual_step, wallie.direction);
-            if expected != actual {
-                tracing::warn!(?current_tile, ?current_dir, "---current---\n");
-                tracing::warn!(?next_tile, ?next_dir, "---next---\n");
-
+            if expected_step != actual_step {
+                tracing::warn!(?expected_step, ?actual_step, ?bouncer, ?tile);
                 grid.print_ascii_debug_map(false);
             }
 
-            pretty_assertions::assert_eq!(expected, actual);
+            pretty_assertions::assert_eq!(expected_step, actual_step);
 
-            if current_tile != next_tile {
-                grid.move_object(entity, next_tile, true)
-                    .expect("Failed to move enemy");
+            match actual_step {
+                Move(next_tile) => {
+                    grid.move_object(entity, next_tile, true)
+                        .expect("Failed to move enemy");
+                    tile = next_tile;
+                }
+                Rotate(next_dir) => bouncer.direction = next_dir,
             }
         }
     }
