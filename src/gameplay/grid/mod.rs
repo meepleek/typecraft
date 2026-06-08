@@ -10,7 +10,7 @@ pub mod world;
 
 pub type Coords = I16Vec2;
 
-#[derive(Debug, Clone, Copy, PartialEq, Reflect)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Reflect)]
 pub enum TileDir {
     Ortho(TileOrthoDir),
     Diag(TileDiagDir),
@@ -71,7 +71,7 @@ impl TileDir {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Reflect, strum::EnumIter)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Reflect, Hash, strum::EnumIter)]
 pub enum TileOrthoDir {
     North,
     East,
@@ -134,7 +134,7 @@ impl TileOrthoDir {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Reflect, strum::EnumIter)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Reflect, Hash, strum::EnumIter)]
 pub enum TileDiagDir {
     NorthEast,
     SouthEast,

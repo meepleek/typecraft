@@ -32,36 +32,45 @@ impl Follower {
 
     fn step(&mut self, current_tile: Coords, grid: &grid::Grid) -> Option<FollowerStep> {
         use FollowerStep::*;
-        use pathfinding::directed::astar::astar;
+        use pathfinding::directed::dijkstra::dijkstra;
 
         fn valid_target_tile(grid: &grid::Grid, tile: Coords) -> bool {
             !grid.is_wall_tile(tile) && !grid.is_occupied_tile(tile, true)
         }
 
         let player_tile = grid.player_tile();
-        if player_tile.manhattan_distance(current_tile) > 5 {
-            return None;
-        }
-
-        astar(
-            &current_tile,
-            |n| {
-                grid.neighbours(*n, tile::TileDirection::Orthogonal, true)
-                    .filter(|t| valid_target_tile(grid, *t))
-                    .map(|t| (t, 1))
+        dijkstra(
+            &(current_tile, self.direction),
+            |(start_tile, start_dir)| {
+                grid.neighbours(*start_tile, tile::TileDirection::Orthogonal, true)
+                    .filter(|next_tile| valid_target_tile(grid, *next_tile))
+                    .map(|next_tile| {
+                        let next_dir = TileDir::from_direction(next_tile - start_tile)
+                            .expect("Failed to get next dir");
+                        let cost = if *start_dir == next_dir {
+                            1
+                        } else {
+                            // try to avoid extra turns
+                            5
+                        };
+                        ((next_tile, next_dir), cost)
+                    })
+                    .collect::<Vec<_>>()
             },
-            |n| player_tile.manhattan_distance(*n),
-            |n| *n == player_tile,
+            |(tile, _)| *tile == player_tile,
         )
         .and_then(|path| {
+            tracing::warn!(cost = path.1);
+            if path.0.len() >= 10 {
+                return None;
+            }
+
             path.0
                 .iter()
                 .nth(1) // skip the start tile
                 .cloned()
         })
-        .map(|next_tile| {
-            let dir = TileDir::from_direction(next_tile - current_tile)
-                .expect("Failed to get a neighbour dir");
+        .map(|(next_tile, dir)| {
             if dir == self.direction {
                 Move(next_tile)
             } else {
@@ -122,11 +131,10 @@ mod tests {
         ",
         ((0, 0), North),
         vec![
-            Some(Rotate(Ortho(East))),
-            Some(Move(Coords::new(1, 0))),
             Some(Rotate(Ortho(South))),
-            Some(Move(Coords::new(1, 1))),
+            Some(Move(Coords::new(0, 1))),
             Some(Rotate(Ortho(East))),
+            Some(Move(Coords::new(1, 1))),
             Some(Move(Coords::new(2, 1))),
             Some(Move(Coords::new(3, 1))),
             Some(Rotate(Ortho(South))),
@@ -136,6 +144,28 @@ mod tests {
             Some(Move(Coords::new(2, 3))),
             None
         ] ; "winding path 1"
+    )]
+    #[test_case(
+        "
+        .#..@
+        ...#.
+        .....
+        G....
+        ",
+        ((0, 0), South),
+        vec![
+            Some(Move(Coords::new(0, 1))),
+            Some(Move(Coords::new(0, 2))),
+            Some(Rotate(Ortho(East))),
+            Some(Move(Coords::new(1, 2))),
+            Some(Move(Coords::new(2, 2))),
+            Some(Move(Coords::new(3, 2))),
+            Some(Move(Coords::new(4, 2))),
+            Some(Rotate(Ortho(North))),
+            Some(Move(Coords::new(4, 1))),
+            Some(Move(Coords::new(4, 0))),
+            None
+        ] ; "avoid turns"
     )]
     #[test_case(
         "..........@G",
