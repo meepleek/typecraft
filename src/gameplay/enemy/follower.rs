@@ -23,7 +23,7 @@ impl Follower {
             super::Enemy,
             object::ContactDamage { dmg: 1 },
             follower,
-            transform,
+            transform.with_rotation(direction.rotation().to_quat()),
             Text2d::new("!"),
             TextFont::from_font_size(70.),
             TextColor(tailwind::RED_400.with_alpha(1.).into()),

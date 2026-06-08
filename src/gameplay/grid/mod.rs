@@ -25,6 +25,23 @@ impl TileDir {
     pub const WEST: Coords = Coords::NEG_X;
     pub const NORTH_WEST: Coords = Coords::NEG_ONE;
 
+    pub const DIRS: [TileDir; 8] = {
+        use TileDiagDir::*;
+        use TileDir::*;
+        use TileOrthoDir::*;
+
+        [
+            Ortho(North),
+            Diag(NorthEast),
+            Ortho(East),
+            Diag(SouthEast),
+            Ortho(South),
+            Diag(SouthWest),
+            Ortho(West),
+            Diag(NorthWest),
+        ]
+    };
+
     pub fn from_direction(dir: Coords) -> Option<Self> {
         match dir {
             Self::NORTH | Self::EAST | Self::SOUTH | Self::WEST => Some(Self::Ortho(
@@ -54,7 +71,7 @@ impl TileDir {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Reflect)]
+#[derive(Debug, Clone, Copy, PartialEq, Reflect, strum::EnumIter)]
 pub enum TileOrthoDir {
     North,
     East,
@@ -117,7 +134,7 @@ impl TileOrthoDir {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Reflect)]
+#[derive(Debug, Clone, Copy, PartialEq, Reflect, strum::EnumIter)]
 pub enum TileDiagDir {
     NorthEast,
     SouthEast,

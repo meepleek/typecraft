@@ -254,7 +254,11 @@ impl PopulatedGrid {
                         }
                         template::TemplateEnemy::Follower => {
                             let follower = enemy::follower::Follower::bundle(
-                                TileDir::Ortho(TileOrthoDir::North),
+                                TileDir::Ortho(
+                                    TileOrthoDir::iter()
+                                        .choose(rng)
+                                        .expect("No dirs to sample from"),
+                                ),
                                 self.spawn_transform(*t),
                             );
                             Some(b.spawn(follower).id())

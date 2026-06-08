@@ -1,6 +1,7 @@
 use crate::prelude::*;
 use bevy::color::palettes::tailwind;
 use std::ops::Not;
+use strum::EnumIter;
 
 pub(super) fn plugin(app: &mut App) {
     app.add_systems(Update, Wallie::run_step.run_on_turn_timer());
@@ -27,11 +28,9 @@ impl Wallie {
             .filter(|dir| grid.is_wall_tile(tile + dir))
             .choose(rng);
         dir.and_then(TileOrthoDir::from_direction).map(|edge| {
-            let orientation = if rng.random::<bool>() {
-                WallOrientation::LeftHandSide
-            } else {
-                WallOrientation::RightHandSide
-            };
+            let orientation = WallOrientation::iter()
+                .choose(rng)
+                .expect("failed to sample orientation");
             Self::new(edge, orientation)
         })
     }
@@ -166,7 +165,7 @@ impl Wallie {
 }
 
 /// Which side is the followed wall in relation the the Wallie
-#[derive(Debug, PartialEq, Clone, Copy, Reflect)]
+#[derive(Debug, PartialEq, Clone, Copy, Reflect, EnumIter)]
 pub enum WallOrientation {
     LeftHandSide,
     RightHandSide,
@@ -204,25 +203,25 @@ mod tests {
     #[test_case(
         Coords::ZERO,
         Some(Wallie {
-            orientation: LeftHandSide,
+            orientation: RightHandSide,
             tile_edge:TileOrthoDir::West
         }))]
     #[test_case(
         Coords::X,
         Some(Wallie {
-            orientation: LeftHandSide,
+            orientation: RightHandSide,
             tile_edge:TileOrthoDir::East
         }))]
     #[test_case(
         Coords::new(0, 2),
         Some(Wallie {
-            orientation: RightHandSide,
+            orientation: LeftHandSide,
             tile_edge:TileOrthoDir::West
         }))]
     #[test_case(
         Coords::new(2, 2),
         Some(Wallie {
-            orientation: RightHandSide,
+            orientation: LeftHandSide,
             tile_edge:TileOrthoDir::East
         }))]
     #[test_case(Coords::new(2, 0), None)]
