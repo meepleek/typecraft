@@ -8,20 +8,12 @@ pub(super) fn plugin(app: &mut App) {
 #[derive(Component, Debug, Clone, Copy, PartialEq, Reflect)]
 #[reflect(Component)]
 pub struct Follower;
-//  {
-//     direction: TileDir,
-// }
 impl Follower {
-    /* pub fn new(direction: TileDir) -> Self {
-        Self { direction }
-    } */
-
     pub fn bundle(transform: Transform) -> impl Bundle {
-        let follower = Self;
         (
             super::Enemy,
             object::ContactDamage { dmg: 1 },
-            follower,
+            Follower,
             transform,
             Text2d::new("+"),
             TextFont::from_font_size(65.),
@@ -82,112 +74,91 @@ impl Follower {
     }
 }
 
-// #[cfg(test)]
-// mod tests {
-//     use test_case::test_case;
-//     use tracing_test::traced_test;
+#[cfg(test)]
+mod tests {
+    use test_case::test_case;
+    use tracing_test::traced_test;
 
-//     use super::*;
-//     use FollowerStep::*;
-//     use TileDiagDir::*;
-//     use TileDir::*;
-//     use TileOrthoDir::*;
+    use super::*;
 
-//     // todo: revamp to use FollowerStep
-//     #[test_case(
-//         "
-//         .WWW
-//         ..WW
-//         ....
-//         ###.
-//         @G##
-//         ",
-//         ((0, 0), Ortho(South)),
-//         vec![
-//             Move(Coords::new(0, 1)),
-//             Move(Coords::new(0, 2)),
-//             Rotate(Ortho(North)),
-//             Move(Coords::new(0, 1)),
-//             Move(Coords::new(0, 0)),
-//             Rotate(Ortho(South)),
-//         ] ; "vertical"
-//     )]
-//     #[test_case(
-//         "
-//         .WWW
-//         ..WW
-//         ....
-//         ###.
-//         @G##
-//         ",
-//         ((0, 1), Ortho(East)),
-//         vec![
-//             Move(Coords::new(1, 1)),
-//             Rotate(Ortho(West)),
-//             Move(Coords::new(0, 1)),
-//             Rotate(Ortho(East)),
-//         ] ; "horizontal"
-//     )]
-//     #[test_case(
-//         "
-//         ...
-//         ...
-//         ...
-//         ###
-//         @G#
-//         ",
-//         ((1, 0), Diag(NorthEast)),
-//         vec![
-//             Rotate(Diag(SouthEast)),
-//             Move(Coords::new(2, 1)),
-//             Rotate(Diag(SouthWest)),
-//             Move(Coords::new(1, 2)),
-//             Rotate(Diag(NorthWest)),
-//             Move(Coords::new(0, 1)),
-//             Rotate(Diag(NorthEast)),
-//             Move(Coords::new(1, 0)),
-//         ] ; "diag - SE"
-//     )]
-//     #[traced_test]
-//     fn step(lvl: &str, initial_state: ((i16, i16), TileDir), expected_steps: Vec<FollowerStep>) {
-//         if expected_steps.len() < 2 {
-//             panic!("There should be at least 2 steps, otherwise the testcase wouldn't do anything")
-//         }
+    #[test_case(
+        "
+        .WWW
+        ..WW
+        ....
+        ###.
+        G.@.
+        ",
+        (0, 0),
+        vec![
+            Some((0, 1)),
+            Some((1, 1)),
+            Some((1, 2)),
+            Some((2, 2)),
+            Some((3, 2)),
+            Some((3, 3)),
+            Some((3, 4)),
+            Some((2, 4)),
+            None
+        ] ; "windy path 1"
+    )]
+    #[test_case(
+        "..........@G",
+        (0, 0),
+        vec![
+            None
+        ] ; "too far"
+    )]
+    #[test_case(
+        "
+        ....
+        ####
+        G.@.
+        ",
+        (0, 0),
+        vec![
+            None
+        ] ; "blocked off"
+    )]
+    #[traced_test]
+    fn step(lvl: &str, initial_state: (i16, i16), expected_steps: Vec<Option<(i16, i16)>>) {
+        if expected_steps.len() < 1 {
+            panic!("There should be at least 2 steps, otherwise the testcase wouldn't do anything")
+        }
 
-//         let mut grid = TestGrid::from_str(lvl);
-//         let entity = Entity::PLACEHOLDER;
-//         let mut tile = initial_state.0.into();
-//         grid.place_object(
-//             tile::TileObject {
-//                 entity,
-//                 kind: tile::TileObjectKind::Enemy,
-//             },
-//             tile,
-//             false,
-//         )
-//         .expect("Failed to place enemy");
-//         let mut bouncer = Follower {
-//             direction: initial_state.1,
-//         };
+        let mut grid = TestGrid::from_str(lvl);
+        let entity = Entity::PLACEHOLDER;
+        let mut tile = initial_state.into();
+        grid.place_object(
+            tile::TileObject {
+                entity,
+                kind: tile::TileObjectKind::Enemy,
+            },
+            tile,
+            false,
+        )
+        .expect("Failed to place enemy");
+        let mut follower = Follower;
 
-//         for expected_step in expected_steps {
-//             let actual_step = bouncer.step(tile, &grid);
+        for expected_step in expected_steps {
+            let expected_step = expected_step.map(Into::into);
+            let actual_step = follower.step(tile, &grid);
 
-//             if expected_step != actual_step {
-//                 tracing::warn!(?expected_step, ?actual_step, ?bouncer, ?tile);
-//                 grid.print_ascii_debug_map(false);
-//             }
+            if expected_step != actual_step {
+                tracing::warn!(?expected_step, ?actual_step, ?follower, ?tile);
+                grid.print_ascii_debug_map(false);
+            }
 
-//             pretty_assertions::assert_eq!(expected_step, actual_step);
+            pretty_assertions::assert_eq!(expected_step, actual_step);
 
-//             match actual_step {
-//                 Move(next_tile) => {
-//                     grid.move_object(entity, next_tile, true)
-//                         .expect("Failed to move enemy");
-//                     tile = next_tile;
-//                 }
-//                 Rotate(next_dir) => bouncer.direction = next_dir,
-//             }
-//         }
-//     }
-// }
+            match actual_step {
+                Some(next_tile) => {
+                    grid.move_object(entity, next_tile, true)
+                        .expect("Failed to move enemy");
+                    tile = next_tile;
+                }
+                None => {}
+            }
+        }
+    }
+}

@@ -132,7 +132,6 @@ mod tests {
     use TileDir::*;
     use TileOrthoDir::*;
 
-    // todo: revamp to use BouncerStep
     #[test_case(
         "
         .WWW
