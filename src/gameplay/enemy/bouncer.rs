@@ -1,9 +1,8 @@
 use crate::prelude::*;
-use bevy::{color::palettes::tailwind, time::common_conditions::on_real_timer};
+use bevy::color::palettes::tailwind;
 
 pub(super) fn plugin(app: &mut App) {
-    // app.add_systems(Update, wallie_move.run_if(on_real_timer(ms(1500))));
-    app.add_systems(Update, Bouncer::run_step.run_if(on_real_timer(ms(500))));
+    app.add_systems(Update, Bouncer::run_step.run_on_turn_timer());
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]

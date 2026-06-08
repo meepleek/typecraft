@@ -7,6 +7,7 @@ pub mod input;
 pub mod level;
 pub mod player;
 pub mod text;
+pub mod turn;
 pub mod wall;
 pub mod wordlist;
 

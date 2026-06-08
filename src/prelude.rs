@@ -40,6 +40,7 @@ pub use crate::gameplay::{
     },
     input, player,
     text::Text2dWriterExt as _,
+    turn::SchedulableExt as _,
     wordlist::{self, char_mask::CharMask, word::Word, wordlist::list::WordList},
 };
 pub use crate::screens::Screen;

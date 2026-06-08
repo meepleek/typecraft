@@ -1,10 +1,9 @@
 use crate::prelude::*;
-use bevy::{color::palettes::tailwind, time::common_conditions::on_real_timer};
+use bevy::color::palettes::tailwind;
 use std::ops::Not;
 
 pub(super) fn plugin(app: &mut App) {
-    // app.add_systems(Update, wallie_move.run_if(on_real_timer(ms(1500))));
-    app.add_systems(Update, Wallie::run_step.run_if(on_real_timer(ms(500))));
+    app.add_systems(Update, Wallie::run_step.run_on_turn_timer());
 }
 
 #[derive(Component, Debug, Clone, Copy, PartialEq, Reflect)]
