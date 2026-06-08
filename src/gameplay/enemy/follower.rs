@@ -29,7 +29,7 @@ impl Follower {
         }
 
         let player_tile = grid.player_tile();
-        if player_tile.manhattan_distance(current_tile) > 8 {
+        if player_tile.manhattan_distance(current_tile) > 5 {
             return None;
         }
 
@@ -83,7 +83,6 @@ mod tests {
 
     #[test_case(
         "
-        .WWW
         ..WW
         ....
         ###.
@@ -91,14 +90,13 @@ mod tests {
         ",
         (0, 0),
         vec![
-            Some((0, 1)),
+            Some((1, 0)),
             Some((1, 1)),
-            Some((1, 2)),
-            Some((2, 2)),
+            Some((2, 1)),
+            Some((3, 1)),
             Some((3, 2)),
             Some((3, 3)),
-            Some((3, 4)),
-            Some((2, 4)),
+            Some((2, 3)),
             None
         ] ; "windy path 1"
     )]

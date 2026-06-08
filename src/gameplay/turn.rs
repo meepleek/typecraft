@@ -6,7 +6,7 @@ use bevy::{
 use crate::prelude::*;
 
 pub fn on_turn_timer() -> impl FnMut(Res<Time>) -> bool + Clone {
-    on_timer(ms(500))
+    on_timer(ms(1_000))
 }
 
 pub trait SchedulableExt<
