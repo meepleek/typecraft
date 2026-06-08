@@ -13,6 +13,7 @@ pub struct TemplateTile {
 pub enum TemplateEnemy {
     Wallie,
     Bouncer(TileDir),
+    Follower,
 }
 
 #[derive(Debug, PartialEq)]
@@ -40,6 +41,7 @@ impl TryFrom<char> for TemplateTileKind {
             '@' => Ok(Self::Player),
             'G' => Ok(Self::Goal),
             '*' => Ok(Self::Enemy(TemplateEnemy::Wallie)),
+            '+' => Ok(Self::Enemy(TemplateEnemy::Follower)),
             '>' => Ok(Self::Enemy(TemplateEnemy::Bouncer(Ortho(East)))),
             '<' => Ok(Self::Enemy(TemplateEnemy::Bouncer(Ortho(West)))),
             '^' => Ok(Self::Enemy(TemplateEnemy::Bouncer(Ortho(North)))),

@@ -252,6 +252,11 @@ impl PopulatedGrid {
                             );
                             Some(b.spawn(bouncer).id())
                         }
+                        template::TemplateEnemy::Follower => {
+                            let follower =
+                                enemy::follower::Follower::bundle(self.spawn_transform(*t));
+                            Some(b.spawn(follower).id())
+                        }
                     },
                     OccupiedPopulatedTile::Wall(typable_words) => Some(
                         b.spawn((
