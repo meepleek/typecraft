@@ -25,7 +25,7 @@ impl Follower {
             follower,
             transform,
             Text2d::new("!"),
-            TextFont::from_font_size(65.),
+            TextFont::from_font_size(70.),
             TextColor(tailwind::RED_400.with_alpha(1.).into()),
         )
     }
@@ -103,89 +103,104 @@ impl Follower {
     }
 }
 
-// #[cfg(test)]
-// mod tests {
-//     use test_case::test_case;
-//     use tracing_test::traced_test;
+#[cfg(test)]
+mod tests {
+    use test_case::test_case;
+    use tracing_test::traced_test;
 
-//     use super::*;
+    use super::*;
+    use FollowerStep::*;
+    use TileDir::*;
+    use TileOrthoDir::*;
 
-//     #[test_case(
-//         "
-//         ..WW
-//         ....
-//         ###.
-//         G.@.
-//         ",
-//         (0, 0),
-//         vec![
-//             Some((1, 0)),
-//             Some((1, 1)),
-//             Some((2, 1)),
-//             Some((3, 1)),
-//             Some((3, 2)),
-//             Some((3, 3)),
-//             Some((2, 3)),
-//             None
-//         ] ; "winding path 1"
-//     )]
-//     #[test_case(
-//         "..........@G",
-//         (0, 0),
-//         vec![
-//             None
-//         ] ; "too far"
-//     )]
-//     #[test_case(
-//         "
-//         ....
-//         ####
-//         G.@.
-//         ",
-//         (0, 0),
-//         vec![
-//             None
-//         ] ; "blocked off"
-//     )]
-//     #[traced_test]
-//     fn step(lvl: &str, initial_state: (i16, i16), expected_steps: Vec<Option<(i16, i16)>>) {
-//         if expected_steps.len() < 1 {
-//             panic!("There should be at least 2 steps, otherwise the testcase wouldn't do anything")
-//         }
+    #[test_case(
+        "
+        ..WW
+        ....
+        ###.
+        G.@.
+        ",
+        ((0, 0), North),
+        vec![
+            Some(Rotate(Ortho(East))),
+            Some(Move(Coords::new(1, 0))),
+            Some(Rotate(Ortho(South))),
+            Some(Move(Coords::new(1, 1))),
+            Some(Rotate(Ortho(East))),
+            Some(Move(Coords::new(2, 1))),
+            Some(Move(Coords::new(3, 1))),
+            Some(Rotate(Ortho(South))),
+            Some(Move(Coords::new(3, 2))),
+            Some(Move(Coords::new(3, 3))),
+            Some(Rotate(Ortho(West))),
+            Some(Move(Coords::new(2, 3))),
+            None
+        ] ; "winding path 1"
+    )]
+    #[test_case(
+        "..........@G",
+        ((0, 0), East),
+        vec![
+            None
+        ] ; "too far"
+    )]
+    #[test_case(
+        "
+        ....
+        ####
+        G.@.
+        ",
+        ((0, 0), East),
+        vec![
+            None
+        ] ; "blocked off"
+    )]
+    #[traced_test]
+    fn step(
+        lvl: &str,
+        initial_state: ((i16, i16), TileOrthoDir),
+        expected_steps: Vec<Option<FollowerStep>>,
+    ) {
+        if expected_steps.len() < 1 {
+            panic!("There should be at least 2 steps, otherwise the testcase wouldn't do anything")
+        }
 
-//         let mut grid = TestGrid::from_str(lvl);
-//         let entity = Entity::PLACEHOLDER;
-//         let mut tile = initial_state.into();
-//         grid.place_object(
-//             tile::TileObject {
-//                 entity,
-//                 kind: tile::TileObjectKind::Enemy,
-//             },
-//             tile,
-//             false,
-//         )
-//         .expect("Failed to place enemy");
-//         let mut follower = Follower;
+        let mut grid = TestGrid::from_str(lvl);
+        let entity = Entity::PLACEHOLDER;
+        let mut tile = initial_state.0.into();
+        grid.place_object(
+            tile::TileObject {
+                entity,
+                kind: tile::TileObjectKind::Enemy,
+            },
+            tile,
+            false,
+        )
+        .expect("Failed to place enemy");
+        let mut follower = Follower {
+            direction: Ortho(initial_state.1),
+        };
 
-//         for expected_step in expected_steps {
-//             let expected_step = expected_step.map(Into::into);
-//             let actual_step = follower.step(tile, &grid);
+        for expected_step in expected_steps {
+            let actual_step = follower.step(tile, &grid);
+            if expected_step != actual_step {
+                tracing::warn!(?expected_step, ?actual_step, ?follower, ?tile);
+                grid.print_ascii_debug_map(false);
+            }
 
-//             if expected_step != actual_step {
-//                 tracing::warn!(?expected_step, ?actual_step, ?follower, ?tile);
-//                 grid.print_ascii_debug_map(false);
-//             }
+            pretty_assertions::assert_eq!(expected_step, actual_step);
 
-//             pretty_assertions::assert_eq!(expected_step, actual_step);
-
-//             match actual_step {
-//                 Some(next_tile) => {
-//                     grid.move_object(entity, next_tile, true)
-//                         .expect("Failed to move enemy");
-//                     tile = next_tile;
-//                 }
-//                 None => {}
-//             }
-//         }
-//     }
-// }
+            match actual_step {
+                Some(Move(next_tile)) => {
+                    grid.move_object(entity, next_tile, true)
+                        .expect("Failed to move enemy");
+                    tile = next_tile;
+                }
+                Some(Rotate(dir)) => {
+                    follower.direction = dir;
+                }
+                None => {}
+            }
+        }
+    }
+}
