@@ -60,7 +60,6 @@ impl Follower {
             |(tile, _)| *tile == player_tile,
         )
         .and_then(|path| {
-            tracing::warn!(cost = path.1);
             if path.0.len() >= 10 {
                 return None;
             }
