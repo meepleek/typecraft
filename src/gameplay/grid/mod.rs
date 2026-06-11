@@ -8,6 +8,10 @@ pub mod template;
 pub mod tile;
 pub mod world;
 
+pub(super) fn plugin(app: &mut App) {
+    app.add_plugins((grid::plugin, tile::plugin, object::plugin));
+}
+
 pub type Coords = I16Vec2;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Reflect)]
@@ -175,6 +179,39 @@ impl TileDiagDir {
     }
 }
 
-pub(super) fn plugin(app: &mut App) {
-    app.add_plugins((grid::plugin, tile::plugin, object::plugin));
+pub trait CoordsExt {
+    fn line_to(self, end: Coords) -> impl Iterator<Item = Coords>;
+}
+impl CoordsExt for Coords {
+    fn line_to(self, end: Coords) -> impl Iterator<Item = Coords> {
+        let delta = end - self;
+        let len = self.chebyshev_distance(end);
+        (0..=len).map(move |step| {
+            let t = step as f32 / len as f32;
+            let x = t * delta.x as f32 + self.x as f32;
+            let y = t * delta.y as f32 + self.y as f32;
+            Coords::new(x.round() as _, y.round() as _)
+        })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use test_case::test_case;
+
+    #[test_case((0, 0), (0, 0), vec![(0, 0)])]
+    #[test_case((0, 0), (1, 0), vec![(0, 0), (1, 0)])]
+    #[test_case((0, 0), (4, 1), vec![(0, 0), (1, 0), (2, 1), (3, 1), (4, 1)])]
+    fn line_to(start: (i16, i16), end: (i16, i16), expected: Vec<(i16, i16)>) {
+        let actual: Vec<_> = Coords::from(start).line_to(end.into()).collect();
+
+        pretty_assertions::assert_eq!(
+            expected
+                .into_iter()
+                .map(Into::into)
+                .collect::<Vec<Coords>>(),
+            actual
+        );
+    }
 }
