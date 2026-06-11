@@ -1,3 +1,5 @@
+use bevy_firefly::prelude::*;
+
 use crate::prelude::*;
 
 pub(super) fn plugin(app: &mut App) {
@@ -23,6 +25,12 @@ pub fn player() -> impl Bundle {
         PlayerHp(3),
         Text2d::new("('')"),
         TextFont::from_font_size(28.),
+        PointLight2d {
+            // color: Color::srgb(1.0, 0.0, 0.0),
+            radius: 700.0,
+            core: LightCore::from_radius(300.),
+            ..default()
+        },
     )
 }
 

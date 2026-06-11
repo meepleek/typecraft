@@ -27,6 +27,7 @@ bevy_asset_loader = { version = "0.26.0", features = ["2d"] }
 itertools = "0.14.0"
 bevy_trauma_shake = { git = "https://github.com/meepleek/bevy_trauma_shake", version = "0.7.0" }
 strum = { version = "0.28.0", features = ["derive"] }
+bevy_firefly = "0.18.4"
 
 [target.wasm32-unknown-unknown.dependencies]
 getrandom = { version = "0.3", features = ["wasm_js"] }

@@ -2,6 +2,7 @@
 
 use bevy::math::U16Vec2;
 use bevy::platform::collections::HashMap;
+use itertools::Itertools;
 
 use crate::prelude::*;
 use player::PlayerGridState;
@@ -316,6 +317,142 @@ impl Grid {
         TILE_ALPHA_INACTIVE
     }
 
+    // fn visible_typable_wall_tiles(&self) -> HashSet<Coords> {
+    //     use pathfinding::directed::dijkstra::dijkstra_partial;
+    //     const MAX_DIST: i16 = 10;
+
+    //     fn reachable_tiles(grid: &Grid, dir_a: Coords, dir_b: Coords) -> HashSet<Coords> {
+    //         let player_tile = grid.player_tile();
+    //         dijkstra_partial(
+    //             &player_tile,
+    //             |n| {
+    //                 [n + dir_a, n + dir_b]
+    //                     .into_iter()
+    //                     .filter_map(|t| (!grid.is_wall_tile(t)).then_some((t, 1)))
+    //             },
+    //             |n| player_tile.manhattan_distance(*n) > MAX_DIST as _,
+    //         )
+    //         .0
+    //         .into_keys()
+    //         .collect()
+    //     }
+
+    //     let player_tile = self.player_tile();
+    //     let ne = reachable_tiles(self, TileDir::NORTH, TileDir::EAST);
+    //     let se = reachable_tiles(self, TileDir::SOUTH, TileDir::EAST);
+    //     let sw = reachable_tiles(self, TileDir::SOUTH, TileDir::WEST);
+    //     let nw = reachable_tiles(self, TileDir::NORTH, TileDir::WEST);
+
+    //     self.iter_destroyable_wall_tiles()
+    //         .filter_map(|(t, ..)| {
+    //             if t.manhattan_distance(player_tile) > MAX_DIST as _ {
+    //                 return None;
+    //             }
+    //             let dir = (t - player_tile).signum();
+    //             let tile_n = t + TileDir::NORTH;
+    //             let tile_e = t + TileDir::EAST;
+    //             let tile_s = t + TileDir::SOUTH;
+    //             let tile_w = t + TileDir::WEST;
+    //             if match dir {
+    //                 TileDir::NORTH => {
+    //                     nw.contains(&tile_s)
+    //                         || nw.contains(&tile_e)
+    //                         || ne.contains(&tile_s)
+    //                         || ne.contains(&tile_w)
+    //                 }
+    //                 TileDir::NORTH_EAST => ne.contains(&tile_s) || ne.contains(&tile_w),
+    //                 TileDir::EAST => {
+    //                     ne.contains(&tile_s)
+    //                         || ne.contains(&tile_w)
+    //                         || se.contains(&tile_n)
+    //                         || se.contains(&tile_w)
+    //                 }
+    //                 TileDir::SOUTH_EAST => se.contains(&tile_n) || se.contains(&tile_w),
+    //                 TileDir::SOUTH => {
+    //                     se.contains(&tile_n)
+    //                         || se.contains(&tile_w)
+    //                         || sw.contains(&tile_n)
+    //                         || sw.contains(&tile_e)
+    //                 }
+    //                 TileDir::SOUTH_WEST => sw.contains(&tile_n) || sw.contains(&tile_e),
+    //                 TileDir::WEST => {
+    //                     sw.contains(&tile_n)
+    //                         || sw.contains(&tile_e)
+    //                         || nw.contains(&tile_s)
+    //                         || nw.contains(&tile_e)
+    //                 }
+    //                 TileDir::NORTH_WEST => nw.contains(&tile_s) || nw.contains(&tile_e),
+    //                 _ => unreachable!("Unknown dir"),
+    //             } {
+    //                 Some(t)
+    //             } else {
+    //                 None
+    //             }
+    //         })
+    //         .collect()
+    // }
+
+    pub fn tile_in_player_line_of_sight(&self, tile: Coords) -> bool {
+        self.tiles_in_line_of_sight(self.player_tile(), tile)
+    }
+
+    fn tiles_in_line_of_sight(&self, tile_a: Coords, tile_b: Coords) -> bool {
+        tile_a.line_to(tile_b).tuple_windows().all(|(a, b)| {
+            let dir = (b - a).signum();
+            let is_diag = a.manhattan_distance(b) == 2;
+            let is_valid_diag = is_diag
+                && (!self.is_wall_tile(a + Coords::X * dir.x)
+                    || !self.is_wall_tile(a + Coords::Y * dir.y));
+
+            if b == tile_b {
+                !is_diag || is_valid_diag
+            } else if self.is_wall_tile(b) {
+                false
+            } else if is_diag {
+                is_valid_diag
+            } else {
+                true
+            }
+        })
+
+        // let mut current_tile = tile_a;
+        // let dir = tile_b - tile_a;
+        // let dist = dir.abs();
+        // let sign = dir.signum();
+        // let mut move_count = Coords::ZERO;
+
+        // loop {
+        //     let prev_tile = current_tile;
+        //     let prefer_horizontal =
+        //         (1 + 2 * move_count.x) * dist.y < (1 + 2 * move_count.y) * dist.x;
+        //     let tile_x = current_tile + Coords::X * sign.x;
+        //     let tile_y = current_tile + Coords::Y * sign.y;
+        //     let x_blocked = self.is_wall_tile(tile_x);
+        //     let y_blocked = self.is_wall_tile(tile_y);
+        //     if tile_x == tile_b || tile_y == tile_b {
+        //         return true;
+        //     }
+        //     match (prefer_horizontal, x_blocked, y_blocked) {
+        //         // all possible movement blocked by wall
+        //         (_, true, true) => return false,
+        //         // move in the X dir
+        //         (true, false, _) | (false, false, true) => {
+        //             current_tile = tile_x;
+        //             move_count.x += 1;
+        //         }
+        //         // move in the Y dir
+        //         (false, _, false) | (true, true, false) => {
+        //             current_tile = tile_y;
+        //             move_count.y += 1;
+        //         }
+        //     }
+        //     if prev_tile == current_tile {
+        //         // tried to move by a fallback 0 dir
+        //         return false;
+        //     }
+        // }
+    }
+
     #[cfg(test)]
     pub fn test_grid_from_populated(populated: populated::PopulatedGrid) -> Self {
         let mut e_idx = 0;
@@ -491,6 +628,171 @@ mod tests {
     }
 
     const PLAYER_TILE: (i16, i16) = (4, 2);
+
+    #[test_case(
+        "
+            WWW
+            ...
+            .@.
+            G..
+        ",
+        vec![
+            (0, 0),
+            (1, 0),
+            (2, 0),
+        ] ; "north wall")]
+    #[test_case(
+        "
+            W.G
+            W..
+            W@.
+            W..
+            W..
+        ",
+        vec![
+            (0, 0),
+            (0, 1),
+            (0, 2),
+            (0, 3),
+            (0, 4),
+        ] ; "west upclose")]
+    #[test_case(
+        "
+            .WWW.
+            .WWW.
+            .....
+            G.@..
+        ",
+        vec![
+            (1, 1),
+            (2, 1),
+            (3, 1),
+        ] ; "hidden tiles")]
+    #[test_case(
+        "
+            .W@W.
+            .WWW.
+            .....
+            G....
+        ",
+        vec![
+            (1, 0),
+            (3, 0),
+            (2, 1),
+        ] ; "cubby")]
+    #[test_case(
+        "
+            ...WWWW
+            ...WWWW
+            .......
+            ...WWWW
+            G.@WWWW
+        ",
+        vec![
+            (3, 0),
+            (3, 1),
+            (3, 3),
+            (3, 4),
+        ] ; "keep going")]
+    fn tile_in_player_line_of_sight(lvl: &str, expected_tiles: Vec<(i16, i16)>) {
+        let grid = TestGrid::from_str(lvl);
+        let actual_tiles = grid
+            .iter_destroyable_wall_tiles()
+            .filter_map(|(t, ..)| grid.tile_in_player_line_of_sight(t).then(|| t))
+            .collect::<Vec<_>>();
+        grid.print_ascii_debug_map_with_remap(false, |t| {
+            if actual_tiles.contains(&t) {
+                Some(('#', DebugGridTileColor::Red))
+            } else {
+                None
+            }
+        });
+        pretty_assertions::assert_eq!(
+            expected_tiles
+                .into_iter()
+                .map(Into::into)
+                .collect::<Vec<Coords>>(),
+            actual_tiles
+        );
+    }
+
+    // #[test_case(
+    //     "
+    //         WWW
+    //         ...
+    //         .@.
+    //         G..
+    //     ",
+    //     vec![
+    //         (0, 0),
+    //         (1, 0),
+    //         (2, 0),
+    //     ] ; "north wall")]
+    // #[test_case(
+    //     "
+    //         W.G
+    //         W..
+    //         W@.
+    //         W..
+    //         W..
+    //     ",
+    //     vec![
+    //         (0, 0),
+    //         (0, 1),
+    //         (0, 2),
+    //         (0, 3),
+    //         (0, 4),
+    //     ] ; "west upclose")]
+    // #[test_case(
+    //     "
+    //         .WWW.
+    //         .WWW.
+    //         .....
+    //         G.@..
+    //     ",
+    //     vec![
+    //         (1, 1),
+    //         (2, 1),
+    //         (3, 1),
+    //     ] ; "hidden tiles")]
+    // #[test_case(
+    //     "
+    //         .W@W.
+    //         .WWW.
+    //         .....
+    //         G....
+    //     ",
+    //     vec![
+    //         (1, 0),
+    //         (3, 0),
+    //         (2, 1),
+    //     ] ; "cubby")]
+    // #[test_case(
+    //     "
+    //         ...WW
+    //         ...WW
+    //         .....
+    //         ...WW
+    //         G.@WW
+    //     ",
+    //     vec![
+    //         (3, 0),
+    //         (3, 1),
+    //         (3, 3),
+    //         (3, 4),
+    // ] ; "keep going")]
+    // fn visible_typable_wall_tiles(lvl: &str, expected_tiles: Vec<(i16, i16)>) {
+    //     let grid = TestGrid::from_str(lvl);
+    //     let actual_tiles = grid.visible_typable_wall_tiles();
+    //     grid.print_ascii_debug_map(false);
+    //     pretty_assertions::assert_eq!(
+    //         expected_tiles
+    //             .into_iter()
+    //             .map(Into::into)
+    //             .collect::<HashSet<Coords>>(),
+    //         actual_tiles
+    //     );
+    // }
 
     fn test_grid() -> Grid {
         TestGrid::from_str(TEST_LVL_5X3)

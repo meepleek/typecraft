@@ -1,4 +1,8 @@
-use bevy::math::{I16Vec2, U16Vec2};
+use bevy::{
+    color::palettes::tailwind,
+    math::{I16Vec2, U16Vec2},
+};
+use bevy_firefly::prelude::Occluder2d;
 use itertools::Itertools;
 
 use crate::{
@@ -288,6 +292,15 @@ impl PopulatedGrid {
                     )
                     .expect("Failed to place tile object");
                 }
+            }
+
+            let tile_size_f32 = self.tile_size as f32;
+            for tile in grid.iter_tiles().filter(|t| !grid.is_targetable_tile(*t)) {
+                b.spawn((
+                    Sprite::from_color(tailwind::GRAY_900, Vec2::splat(tile_size_f32)),
+                    Occluder2d::rectangle(tile_size_f32, tile_size_f32).with_z_sorting(false),
+                    self.spawn_transform(tile),
+                ));
             }
 
             b.spawn((grid, Transform::default(), Visibility::default()));
