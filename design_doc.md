@@ -61,6 +61,11 @@
 - explosion
 - change move chars (in area)
 
+### Enemy Units
+
+- wallie + contact dmg - saw
+- wallie + projectile - walking turret
+
 ## Special rooms
 
 ### Traps (could be boss mechanics instead)
