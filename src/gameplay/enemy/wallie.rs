@@ -118,9 +118,7 @@ impl Wallie {
                             RightHandSide => wallie.tile_edge.rotate_ccw(),
                         };
                         Some(current_tile)
-                    }
-                    // todo: also check for dead-ends here or is that handled by the previous branch?
-                    else if !has_flipped {
+                    } else if !has_flipped {
                         // can't continue - turn around
                         wallie.orientation = !wallie.orientation;
                         // rerun the whole thing
